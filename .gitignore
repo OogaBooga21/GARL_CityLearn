@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Models
+*.zip
+
+# Output
+citylearn_output/
+
+# Node
+node_modules/

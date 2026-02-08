@@ -62,3 +62,51 @@ def copy_output_files(output_dir: Path, run_name: str):
         print("Could not import citylearn library to determine output path.")
     except Exception as e:
         print(f"An error occurred while copying files: {e}")
+
+def print_schema_details(env):
+    """
+    Prints detailed information about the CityLearn environment schema.
+    """
+    print("\n--- CityLearn Environment Schema Details ---")
+    print(f"Total number of buildings: {len(env.buildings)}")
+
+    for i, building in enumerate(env.buildings):
+        print(f"\nBuilding {i+1}: {building.name}")
+        
+        # Actions
+        print(f"  Action Space: {building.action_space}")
+        print(f"  Available Actions:")
+        for action_name, is_active in building.action_metadata.items():
+            if is_active:
+                print(f"    - {action_name}")
+        
+        # Storages
+        if building.cooling_storage is not None:
+            print(f"  Cooling Storage:")
+            print(f"    Capacity: {building.cooling_storage.capacity} kWh")
+            if hasattr(building.cooling_storage, 'efficiency'):
+                print(f"    Efficiency: {building.cooling_storage.efficiency}")
+        
+        if building.dhw_storage is not None:
+            print(f"  DHW Storage:")
+            print(f"    Capacity: {building.dhw_storage.capacity} kWh")
+            if hasattr(building.dhw_storage, 'efficiency'):
+                print(f"    Efficiency: {building.dhw_storage.efficiency}")
+            
+        if building.electrical_storage is not None:
+            print(f"  Electrical Storage:")
+            print(f"    Capacity: {building.electrical_storage.capacity} kWh")
+            if hasattr(building.electrical_storage, 'efficiency'):
+                print(f"    Efficiency: {building.electrical_storage.efficiency}")
+            
+        # PV
+        if building.pv is not None:
+            print(f"  PV System:")
+            print(f"    Nominal Power: {building.pv.nominal_power} kW")
+        
+        # Other relevant building parameters (can be expanded as needed)
+        # print(f"  Building Type: {building.building_type}")
+        # print(f"  Area: {building.area} m2")
+        # print(f"  Number of Occupants: {building.n_occupants}")
+        
+    print("\n--- End of Schema Details ---")

@@ -4,7 +4,7 @@ from citylearn.citylearn import CityLearnEnv
 from rbc_agent import SimpleRBC
 from stateful_rbc_agent import StatefulRBC
 from translation_layer import TranslationLayer
-from utils import copy_output_files
+from utils import copy_output_files, print_schema_details # Import the new function
 import config
 from custom_rewards import GridConsumptionReward
 from ppo_agent import PPOAgent
@@ -12,6 +12,18 @@ import gymnasium as gym
 import numpy as np
 
 SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
+
+# --- Schema and Dataset Information ---
+print("--- Initializing CityLearn Environment for Schema Inspection ---")
+temp_env = CityLearnEnv(SCHEMA_PATH)
+print_schema_details(temp_env)
+
+print("\n--- Available CityLearn Datasets ---")
+available_datasets = citylearn.data.DataSet().get_dataset_names()
+for name in sorted(available_datasets):
+    print(f"- {name}")
+print("--- End of Available Datasets ---\n")
+# ------------------------------------
 
 class SingleBuildingEnvWrapper(gym.Wrapper):
     def __init__(self, env):
@@ -89,9 +101,9 @@ def run_rbc_simulation(episode_time_steps: int, central_agent: bool):
 
     # Initialize agents
     # To use the SimpleRBC, uncomment the following line
-    # agents = [SimpleRBC(building.action_space) for building in env.buildings]
+    agents = [SimpleRBC(building.action_space) for building in env.buildings]
     # To use the StatefulRBC, uncomment the following line
-    agents = [StatefulRBC(building.action_space, building.active_observations) for building in env.buildings]
+    # agents = [StatefulRBC(building.action_space, building.active_observations) for building in env.buildings]
 
     observations, _ = env.reset()
     while not env.terminated:
