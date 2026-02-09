@@ -69,5 +69,5 @@ def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool
     copy_output_files(output_dir, run_name)
 
     # Process the simulation output to calculate and save custom KPIs
-    from utils import process_simulation_output
-    process_simulation_output(output_dir, kpi_output_dir, env)
+    from kpi_calculator import calculate_and_save_kpis
+    calculate_and_save_kpis(output_dir, kpi_output_dir, env)

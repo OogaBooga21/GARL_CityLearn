@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import os
 import glob
 
@@ -29,14 +30,30 @@ def generate_plots():
             # Get the file name without the extension
             file_name = os.path.splitext(os.path.basename(file))[0]
 
-            # Create a plot
-            fig = px.line(df, x='timestamp', y=df.columns[1:], title=file_name)
-
-            # Save the plot as an html file
             plot_file_name = f'plots/{file_name}.html'
-            fig.write_html(f'gui/{plot_file_name}')
 
-            # Add a link to the plot in the index.html file
+            if file_name == 'summary_kpis':
+                # For summary_kpis, create a table
+                fig = go.Figure(data=[go.Table(
+                    header=dict(values=list(df.columns),
+                                fill_color='paleturquoise',
+                                align='left'),
+                    cells=dict(values=[df[col] for col in df.columns],
+                               fill_color='lavender',
+                               align='left'))
+                ])
+                fig.update_layout(title_text=file_name)
+                fig.write_html(f'gui/{plot_file_name}')
+            else:
+                # For other KPIs, create a line plot
+                if 'timestamp' in df.columns:
+                    fig = px.line(df, x='timestamp', y=df.columns[1:], title=file_name)
+                    fig.write_html(f'gui/{plot_file_name}')
+                else:
+                    print(f"Skipping {file_name}.csv as it does not contain a 'timestamp' column for line plotting.")
+                    continue # Skip adding to index.html if not plotted
+
+            # Add a link to the plot/table in the index.html file
             f.write(f'<li><a href="{plot_file_name}">{file_name}</a></li>')
 
         f.write('</ul></body></html>')
