@@ -4,6 +4,7 @@ from utils import print_schema_details
 import config
 from ppo_agent import run_ppo_training
 from rbc_agent import run_rbc_simulation
+from plot_kpis import generate_plots
 
 SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
 
@@ -34,3 +35,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    generate_plots()

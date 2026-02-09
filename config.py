@@ -6,7 +6,7 @@ This file contains the configuration parameters for the CityLearn simulation.
 # --- Simulation Parameters ---
 DATASET_NAME = 'citylearn_challenge_2020_climate_zone_1'
 CENTRAL_AGENT = False
-EPISODE_TIME_STEPS = 500
+EPISODE_TIME_STEPS = 1000 #8760 max
 # ---------------------------
 
 # --- Agent Parameters ---
