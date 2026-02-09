@@ -8,6 +8,7 @@ venv/
 
 # Output
 citylearn_output/
+calculated_kpis/
 
 # Node
 node_modules/
