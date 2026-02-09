@@ -2,9 +2,11 @@ import citylearn.data
 from citylearn.citylearn import CityLearnEnv
 from utils import print_schema_details
 import config
-from ppo_agent import run_ppo_training
+from ppo_agent import run_ppo_training, run_ppo_evaluation
 from rbc_agent import run_rbc_simulation
 from plot_kpis import generate_plots
+from kpi_calculator import calculate_and_save_kpis
+from pathlib import Path
 
 SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
 
@@ -32,6 +34,12 @@ def main():
         )
     elif config.AGENT_TYPE == 'PPO':
         run_ppo_training(schema_path=SCHEMA_PATH)
+        eval_env = run_ppo_evaluation(schema_path=SCHEMA_PATH)
+        
+        # Calculate and save KPIs
+        output_dir = Path(config.BASE_OUTPUT_DIR)
+        kpi_output_dir = Path(config.KPI_OUTPUT_DIR)
+        calculate_and_save_kpis(output_dir, kpi_output_dir, eval_env)
 
 if __name__ == '__main__':
     main()

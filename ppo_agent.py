@@ -6,6 +6,8 @@ import numpy as np
 from citylearn.citylearn import CityLearnEnv
 from custom_rewards import GridConsumptionReward
 import config
+from pathlib import Path
+from utils import copy_output_files # Import copy_output_files
 
 class PPOAgent:
     """
@@ -51,8 +53,13 @@ class SingleBuildingEnvWrapper(gym.Wrapper):
         # The observation space is the single building's observation space
         self.observation_space = env.observation_space[0]
         self.building_metadata = self.env.buildings[0].action_metadata
+        # Store reference to unwrapped environment
+        self._base_env = env
 
     def step(self, action):
+        # Clip actions to ensure they're within [-1, 1] range
+        action = np.clip(action, -1.0, 1.0)
+        
         # Translate the standardized action to the building's action space
         building_action = []
         if self.building_metadata['cooling_storage']:
@@ -71,6 +78,21 @@ class SingleBuildingEnvWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         return obs[0], info
+
+    @property
+    def terminated(self):
+        """
+        Expose the terminated property from the base environment.
+        """
+        return self._base_env.terminated
+
+    def close(self):
+        """
+        Closes the wrapped environment properly to trigger rendering.
+        """
+        if hasattr(self, '_base_env') and self._base_env is not None:
+            return self._base_env.close()
+        return self.env.close()
 
 def run_ppo_training(schema_path):
     """
@@ -92,7 +114,93 @@ def run_ppo_training(schema_path):
     agent.learn(total_timesteps=config.PPO_TRAINING_TIMESTEPS)
     agent.save(config.PPO_MODEL_PATH)
 
+    # Close training environment
+    train_env.close()
+
     print("PPO training finished.")
-    # Note: The environment does not render during training, so no output files are generated yet.
-    # This is just a placeholder for when evaluation is added back.
-    # copy_output_files(Path('citylearn_output'), 'ppo_training')
+
+    
+
+def run_ppo_evaluation(schema_path):
+    """
+    Evaluates a trained PPO agent.
+    """
+    print("\n--- PPO Evaluation ---")
+
+    # Create a single-building environment for evaluation
+    output_dir = Path(config.BASE_OUTPUT_DIR) # Base output directory
+    
+    # Clear output directory before evaluation
+    if output_dir.exists():
+        for item in output_dir.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                import shutil
+                shutil.rmtree(item)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    eval_env = CityLearnEnv(
+        schema_path,
+        central_agent=False,
+        episode_time_steps=config.EPISODE_TIME_STEPS,  # CRITICAL: Set episode length
+        reward_function=GridConsumptionReward,
+        render_mode='end', # Ensure render_mode is set to 'end'
+        render_directory=Path.cwd() / output_dir, # Files go directly here
+        render_session_name='' # Empty string = no subdirectory
+    )
+
+    eval_env.buildings = [eval_env.buildings[0]]
+    
+    # Keep reference to base environment before wrapping
+    base_eval_env = eval_env
+    eval_env = SingleBuildingEnvWrapper(eval_env)
+
+    # Load the trained PPO agent
+    agent = PPOAgent(eval_env)
+    agent.load(config.PPO_MODEL_PATH)
+    
+    # Run evaluation simulation - CRITICAL: Run until environment terminates naturally
+    observations = eval_env.reset()[0]
+
+    step_count = 0
+    # Use the same pattern as RBC: run until the environment is terminated
+    while not eval_env.terminated:
+        actions = agent.predict(observations)
+        observations, rewards, terminated, truncated, info = eval_env.step(actions)
+        step_count += 1
+        
+        # Safety check to prevent infinite loop
+        if step_count >= config.EPISODE_TIME_STEPS:
+            print(f"Warning: Reached maximum steps ({config.EPISODE_TIME_STEPS}) but episode not terminated")
+            break
+
+    print(f"PPO evaluation ran for {step_count} steps")
+    print(f"Episode terminated: {eval_env.terminated}")
+    
+    # CRITICAL: Close the environment to trigger rendering
+    eval_env.close()
+    
+    # CityLearn might create a timestamp subdirectory even with render_session_name=''
+    # So we need to move files from any subdirectories to the main output_dir
+    if output_dir.exists():
+        for subdir in output_dir.iterdir():
+            if subdir.is_dir():
+                # Found a subdirectory (likely timestamp-based)
+                print(f"Found subdirectory: {subdir.name}, moving files to {output_dir}")
+                for file in subdir.iterdir():
+                    if file.is_file():
+                        # Move file to parent directory
+                        import shutil
+                        shutil.move(str(file), str(output_dir / file.name))
+                # Remove the empty subdirectory
+                subdir.rmdir()
+                print(f"Moved files from {subdir.name} to {output_dir}")
+    
+    print(f"PPO evaluation finished. Simulation data saved to {output_dir}")
+    
+    # Files are already in the right location, no need to copy
+    # copy_output_files(output_dir, run_name)
+    
+    # Return the base environment for KPI calculation
+    return base_eval_env

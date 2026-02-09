@@ -46,7 +46,7 @@ def copy_output_files(output_dir: Path, run_name: str):
     try:
         # Construct the source path
         source_path = Path(citylearn.__file__).parent.parent / output_dir / run_name
-        destination_path = Path.cwd() / output_dir
+        destination_path = Path.cwd() / output_dir # Reverted: copy to base output_dir
         
         # Create destination directory if it doesn't exist
         destination_path.mkdir(parents=True, exist_ok=True)

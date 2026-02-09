@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 from citylearn.citylearn import CityLearnEnv
 from translation_layer import TranslationLayer
-from utils import copy_output_files
+import config # Import config
 
 class SimpleRBC:
     """
@@ -34,17 +34,26 @@ def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool
     """
     Runs a CityLearn simulation with the given parameters using an RBC agent.
     """
-    output_dir = Path('citylearn_output')
-    kpi_output_dir = Path('calculated_kpis')
-    run_name = 'my_first_run'
+    output_dir = Path(config.BASE_OUTPUT_DIR) # Base output directory
+    kpi_output_dir = Path(config.KPI_OUTPUT_DIR)
     
+    # Clear output directory before simulation
+    if output_dir.exists():
+        for item in output_dir.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                import shutil
+                shutil.rmtree(item)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     env = CityLearnEnv(
         schema_path,
         central_agent=central_agent,
         episode_time_steps=episode_time_steps,
         render_mode='end',
-        render_directory=output_dir,
-        render_session_name=run_name,
+        render_directory=Path.cwd() / output_dir, # Files go directly here
+        render_session_name='' # Empty string = no subdirectory
     )
 
     # Initialize the translation layer
@@ -62,11 +71,28 @@ def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool
         env_actions = translator.translate_actions(standard_actions)
         
         observations, _, _, _, _ = env.step(env_actions)
+    
+    env.close() # Ensure environment is closed to finalize output files
 
-    print("Simulation finished.")
+    # CityLearn might create a timestamp subdirectory even with render_session_name=''
+    # So we need to move files from any subdirectories to the main output_dir
+    if output_dir.exists():
+        for subdir in output_dir.iterdir():
+            if subdir.is_dir():
+                # Found a subdirectory (likely timestamp-based)
+                print(f"Found subdirectory: {subdir.name}, moving files to {output_dir}")
+                for file in subdir.iterdir():
+                    if file.is_file():
+                        # Move file to parent directory
+                        import shutil
+                        shutil.move(str(file), str(output_dir / file.name))
+                # Remove the empty subdirectory
+                subdir.rmdir()
+                print(f"Moved files from {subdir.name} to {output_dir}")
 
-    # Copy the output files from the CityLearn environment
-    copy_output_files(output_dir, run_name)
+    print(f"RBC Simulation finished. Output saved to {output_dir}")
+
+    # Files are already in the right location, no need to copy
 
     # Process the simulation output to calculate and save custom KPIs
     from kpi_calculator import calculate_and_save_kpis
