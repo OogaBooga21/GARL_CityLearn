@@ -8,11 +8,9 @@ from plot_kpis import generate_plots
 from kpi_calculator import calculate_and_save_kpis
 from pathlib import Path
 
-SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
-
 # --- Schema and Dataset Information ---
 print("--- Initializing CityLearn Environment for Schema Inspection ---")
-temp_env = CityLearnEnv(SCHEMA_PATH)
+temp_env = CityLearnEnv(config.SCHEMA_PATH)
 print_schema_details(temp_env)
 
 print("\n--- Available CityLearn Datasets ---")
@@ -28,13 +26,13 @@ def main():
     """
     if config.AGENT_TYPE == 'RBC':
         run_rbc_simulation(
-            schema_path=SCHEMA_PATH,
+            schema_path=config.SCHEMA_PATH,
             episode_time_steps=config.EPISODE_TIME_STEPS,
             central_agent=config.CENTRAL_AGENT
         )
     elif config.AGENT_TYPE == 'PPO':
-        run_ppo_training(schema_path=SCHEMA_PATH)
-        eval_env = run_ppo_evaluation(schema_path=SCHEMA_PATH)
+        run_ppo_training(schema_path=config.SCHEMA_PATH)
+        eval_env = run_ppo_evaluation(schema_path=config.SCHEMA_PATH)
         
         # Calculate and save KPIs
         output_dir = Path(config.BASE_OUTPUT_DIR)

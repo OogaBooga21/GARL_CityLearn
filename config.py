@@ -4,6 +4,7 @@ This file contains the configuration parameters for the CityLearn simulation.
 """
 
 # --- Simulation Parameters ---
+SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
 DATASET_NAME = 'citylearn_challenge_2020_climate_zone_1'
 CENTRAL_AGENT = False
 EPISODE_TIME_STEPS = 1000 #8760 max
