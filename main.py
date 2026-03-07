@@ -4,6 +4,7 @@ from utils import print_schema_details, generate_run_id
 import config
 from ppo_agent import run_ppo_training, run_ppo_evaluation
 from rbc_agent import run_rbc_simulation
+from rbc_agent_2 import run_rbc_2_simulation
 from plot_kpis import generate_plots
 from kpi_calculator import calculate_and_save_kpis
 from pathlib import Path
@@ -46,6 +47,15 @@ def main():
         env = CityLearnEnv(config.SCHEMA_PATH) # Create a dummy env to pass to kpi calculator
         calculate_and_save_kpis(run_output_dir, run_kpi_output_dir, env)
 
+    elif config.AGENT_TYPE == 'RBC_2':
+        run_rbc_2_simulation(
+            schema_path=config.SCHEMA_PATH,
+            episode_time_steps=config.EPISODE_TIME_STEPS,
+            central_agent=config.CENTRAL_AGENT,
+            run_id=run_id
+        )
+        env = CityLearnEnv(config.SCHEMA_PATH) # Create a dummy env to pass to kpi calculator
+        calculate_and_save_kpis(run_output_dir, run_kpi_output_dir, env)
 
     elif config.AGENT_TYPE == 'PPO':
         run_ppo_training(schema_path=config.SCHEMA_PATH, run_id=run_id)

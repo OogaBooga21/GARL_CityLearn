@@ -90,7 +90,3 @@ def run_rbc_2_simulation(schema_path, episode_time_steps: int, central_agent: bo
 
     run_output_dir = output_dir / run_id
     print(f"RBC Simulation finished. Output saved to {run_output_dir}")
-
-    # Process the simulation output to calculate and save custom KPIs
-    from kpi_calculator import calculate_and_save_kpis
-    calculate_and_save_kpis(run_output_dir, kpi_output_dir, env)
