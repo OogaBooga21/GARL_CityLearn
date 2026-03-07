@@ -30,21 +30,12 @@ class SimpleRBC:
         
         return action
 
-def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool):
+def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool, run_id: str):
     """
     Runs a CityLearn simulation with the given parameters using an RBC agent.
     """
-    output_dir = Path(config.BASE_OUTPUT_DIR) # Base output directory
-    kpi_output_dir = Path(config.KPI_OUTPUT_DIR)
-    
-    # Clear output directory before simulation
-    if output_dir.exists():
-        for item in output_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                import shutil
-                shutil.rmtree(item)
+    # Use the run_id to create a unique output directory
+    output_dir = Path(config.BASE_OUTPUT_DIR) / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     env = CityLearnEnv(
@@ -52,8 +43,8 @@ def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool
         central_agent=central_agent,
         episode_time_steps=episode_time_steps,
         render_mode='end',
-        render_directory=Path.cwd() / output_dir, # Files go directly here
-        render_session_name='' # Empty string = no subdirectory
+        render_directory=Path.cwd() / Path(config.BASE_OUTPUT_DIR), # Base directory for all runs
+        render_session_name=run_id # This will create the unique subdirectory
     )
 
     # Initialize the translation layer
@@ -74,26 +65,4 @@ def run_rbc_simulation(schema_path, episode_time_steps: int, central_agent: bool
     
     env.close() # Ensure environment is closed to finalize output files
 
-    # CityLearn might create a timestamp subdirectory even with render_session_name=''
-    # So we need to move files from any subdirectories to the main output_dir
-    if output_dir.exists():
-        for subdir in output_dir.iterdir():
-            if subdir.is_dir():
-                # Found a subdirectory (likely timestamp-based)
-                print(f"Found subdirectory: {subdir.name}, moving files to {output_dir}")
-                for file in subdir.iterdir():
-                    if file.is_file():
-                        # Move file to parent directory
-                        import shutil
-                        shutil.move(str(file), str(output_dir / file.name))
-                # Remove the empty subdirectory
-                subdir.rmdir()
-                print(f"Moved files from {subdir.name} to {output_dir}")
-
     print(f"RBC Simulation finished. Output saved to {output_dir}")
-
-    # Files are already in the right location, no need to copy
-
-    # Process the simulation output to calculate and save custom KPIs
-    from kpi_calculator import calculate_and_save_kpis
-    calculate_and_save_kpis(output_dir, kpi_output_dir, env)

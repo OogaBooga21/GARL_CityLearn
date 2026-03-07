@@ -1,120 +1,163 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KPI Dashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>KPI Dashboard</h1>
-        <p>Add or remove plots to compare.</p>
 
-        <div class="plot-area" id="plot-area">
-            <!-- Plot selectors and add button will be dynamically inserted here -->
-        </div>
+    <div class="header">
+        <h1>KPI Dashboard</h1>
+        <button id="addViewBtn">Add View</button>
+    </div>
+
+    <div id="dashboard">
+        <!-- Views will be dynamically inserted here -->
     </div>
 
     <script>
-        const plotFiles = [{"name": "Grid Consumption", "path": "plots/grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "plots/total_grid_consumption.html"}, {"name": "Building Load", "path": "plots/load.html"}, {"name": "Total Building Load", "path": "plots/total_load.html"}, {"name": "Electricity Cost", "path": "plots/cost.html"}, {"name": "Total Electricity Cost", "path": "plots/total_cost.html"}, {"name": "PV Generation", "path": "plots/pv_generation.html"}, {"name": "Total PV Generation", "path": "plots/total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "plots/electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "plots/total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "plots/electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "plots/total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "plots/summary_kpis.html"}];
-        let plotSelectorCounter = 0;
-        const plotArea = document.getElementById('plot-area');
+        document.addEventListener('DOMContentLoaded', () => {
+            const dashboard = document.getElementById('dashboard');
+            const addViewBtn = document.getElementById('addViewBtn');
 
-        function createPlotSelector() {
-            plotSelectorCounter++;
-            const selectorId = `plot-selector-${plotSelectorCounter}`;
+            // These will be populated by the Python script
+            const availableRuns = ["RBC_nypc_20260307_223601", "RBC_evri_20260307_224245"];
+            const availableKPIs = {"RBC_nypc_20260307_223601": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_evri_20260307_224245": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}]};
 
-            const plotSelector = document.createElement('div');
-            plotSelector.className = 'plot-selector';
-            plotSelector.id = selectorId;
+            // --- State Management ---
+            let viewStates = [];
 
-            plotSelector.innerHTML = `
-                <div class="plot-header">
-                    <select id="plot-select-${plotSelectorCounter}" onchange="updatePlot('${plotSelectorCounter}')">
-                        <option value="">-- Select a Plot --</option>
-                    </select>
-                    <button class="remove-btn" onclick="removePlotSelector('${selectorId}')">X</button>
-                </div>
-                <iframe id="plot-frame-${plotSelectorCounter}" src=""></iframe>
-            `;
-            
-            return plotSelector;
-        }
-
-        function populateDropdown(num) {
-            const select = document.getElementById(`plot-select-${num}`);
-            if (!select) return; // Guard clause
-            const buildingDetailsOption = new Option("Building Details", "plots/buildings.html");
-            select.add(buildingDetailsOption);
-            plotFiles.forEach(file => {
-                const option = new Option(file.name, file.path);
-                select.add(option);
-            });
-        }
-
-        function updatePlot(num) {
-            const select = document.getElementById(`plot-select-${num}`);
-            const frame = document.getElementById(`plot-frame-${num}`);
-            frame.src = select.value;
-        }
-
-        function removePlotSelector(selectorId) {
-            const plotSelectors = plotArea.querySelectorAll('.plot-selector');
-            if (plotSelectors.length <= 1) {
-                alert("At least one plot must remain.");
-                return;
+            function saveState() {
+                localStorage.setItem('dashboardState', JSON.stringify(viewStates));
             }
-            const plotSelector = document.getElementById(selectorId);
-            if (plotSelector) {
-                plotSelector.remove();
-                updateLayout();
-            }
-        }
 
-        function addPlot() {
-            const newPlot = createPlotSelector();
-            plotArea.insertBefore(newPlot, document.getElementById('add-plot-btn-container'));
-            populateDropdown(plotSelectorCounter);
-            updateLayout();
-        }
-
-        function updateLayout() {
-            const plotSelectors = plotArea.querySelectorAll('.plot-selector');
-            const numPlots = plotSelectors.length;
-            const addBtnContainer = document.getElementById('add-plot-btn-container');
-
-            if (window.innerWidth >= 2000) { // Wide screen layout
-                if (numPlots === 1) {
-                    plotSelectors[0].style.width = 'calc(90% - 12px)';
-                    addBtnContainer.style.width = 'calc(10% - 12px)';
-                } else {
-                    plotSelectors.forEach(ps => {
-                        ps.style.width = 'calc(50% - 22px)';
-                    });
-                    addBtnContainer.style.width = 'calc(50% - 22px)';
+            function loadState() {
+                const savedState = localStorage.getItem('dashboardState');
+                if (savedState) {
+                    return JSON.parse(savedState);
                 }
-            } else { // Narrow screen layout
-                plotSelectors.forEach(ps => {
-                    ps.style.width = '100%';
-                });
-                addBtnContainer.style.width = '100%';
+                // Default to one view if no state is saved
+                return [{ run: availableRuns[0] || '', kpi: '' }];
             }
-        }
 
-        // Initial Setup
-        window.onload = function() {
-            // Create and append the add button
-            const addBtnContainer = document.createElement('div');
-            addBtnContainer.id = 'add-plot-btn-container';
-            addBtnContainer.innerHTML = '<span id="add-plot-btn">+</span>';
-            addBtnContainer.onclick = addPlot;
-            plotArea.appendChild(addBtnContainer);
+            // --- View Creation ---
+            function createView(state, index) {
+                const view = document.createElement('div');
+                view.className = 'view';
+                view.dataset.id = index;
 
-            // Add the first plot
-            addPlot();
-        };
+                // Header
+                const header = document.createElement('div');
+                header.className = 'view-header';
 
-        window.onresize = updateLayout;
+                // Run Selector
+                const runSelector = document.createElement('select');
+                runSelector.className = 'run-selector';
+                availableRuns.forEach(runId => {
+                    const option = new Option(runId, runId, false, runId === state.run);
+                    runSelector.add(option);
+                });
+                runSelector.addEventListener('change', (e) => {
+                    viewStates[index].run = e.target.value;
+                    // When run changes, reset KPI and update KPI selector
+                    viewStates[index].kpi = ''; 
+                    updateKPISelector(view, viewStates[index]);
+                    updatePlot(view, viewStates[index]);
+                    saveState();
+                });
 
+                // KPI Selector
+                const kpiSelector = document.createElement('select');
+                kpiSelector.className = 'kpi-selector';
+                kpiSelector.addEventListener('change', (e) => {
+                    viewStates[index].kpi = e.target.value;
+                    updatePlot(view, viewStates[index]);
+                    saveState();
+                });
+
+                // Close Button
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'close-btn';
+                closeBtn.innerHTML = '&times;';
+                closeBtn.addEventListener('click', () => {
+                    removeView(index);
+                });
+
+                header.appendChild(runSelector);
+                header.appendChild(kpiSelector);
+                header.appendChild(closeBtn);
+
+                // Plot Container
+                const plotContainer = document.createElement('div');
+                plotContainer.className = 'plot-container';
+                const iframe = document.createElement('iframe');
+                plotContainer.appendChild(iframe);
+
+                view.appendChild(header);
+                view.appendChild(plotContainer);
+
+                dashboard.appendChild(view);
+
+                // Initial population
+                updateKPISelector(view, state);
+                updatePlot(view, state);
+            }
+
+            // --- Update Functions ---
+            function updateKPISelector(view, state) {
+                const kpiSelector = view.querySelector('.kpi-selector');
+                kpiSelector.innerHTML = '<option value="">Select KPI</option>';
+                const kpisForRun = availableKPIs[state.run] || [];
+                kpisForRun.forEach(kpi => {
+                    const option = new Option(kpi.name, kpi.path, false, kpi.path === state.kpi);
+                    kpiSelector.add(option);
+                });
+            }
+
+            function updatePlot(view, state) {
+                const iframe = view.querySelector('iframe');
+                if (state.run && state.kpi) {
+                    iframe.src = `plots/${state.run}/${state.kpi}`;
+                } else {
+                    iframe.src = 'about:blank';
+                }
+            }
+            
+            // --- View Management ---
+            function renderDashboard() {
+                dashboard.innerHTML = '';
+                viewStates.forEach((state, index) => {
+                    createView(state, index);
+                });
+            }
+
+            function addView() {
+                const newRun = availableRuns.length > 0 ? availableRuns[0] : '';
+                viewStates.push({ run: newRun, kpi: '' });
+                saveState();
+                renderDashboard();
+            }
+
+            function removeView(index) {
+                viewStates.splice(index, 1);
+                saveState();
+                renderDashboard();
+            }
+
+            // --- Initialization ---
+            function init() {
+                addViewBtn.addEventListener('click', addView);
+                viewStates = loadState();
+                if (viewStates.length === 0 && availableRuns.length > 0) {
+                   viewStates = [{ run: availableRuns[0] || '', kpi: '' }];
+                }
+                renderDashboard();
+            }
+
+            init();
+        });
     </script>
 </body>
 </html>

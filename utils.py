@@ -4,6 +4,17 @@ from pathlib import Path
 import citylearn
 import numpy as np
 import pandas as pd
+import datetime
+import random
+import string
+
+def generate_run_id(agent_type: str) -> str:
+    """
+    Generates a unique run ID with the format: {agent_type}_{4_random_letters}_{timestamp}.
+    """
+    four_random_letters = ''.join(random.choices(string.ascii_lowercase, k=4))
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{agent_type}_{four_random_letters}_{timestamp}"
 
 def inspect_action_space(env):
     """

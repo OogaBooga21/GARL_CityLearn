@@ -75,10 +75,6 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
 
     # Create the KPI output directory if it doesn't exist
     kpi_output_dir.mkdir(parents=True, exist_ok=True)
-    # Clear the directory
-    for item in kpi_output_dir.iterdir():
-        if item.is_file():
-            item.unlink()
 
     for kpi_name, df in kpi_dfs.items():
         if not df.empty:
@@ -145,4 +141,4 @@ def calculate_and_save_summary_kpis(kpi_output_dir: Path):
     summary_df = pd.DataFrame([summary_data])
     summary_df.to_csv(kpi_output_dir / 'summary_kpis.csv', index=False)
 
-    print("Summary KPIs calculated and saved to 'calculated_kpis/summary_kpis.csv'")
+    print(f"Summary KPIs calculated and saved to '{kpi_output_dir / 'summary_kpis.csv'}'")

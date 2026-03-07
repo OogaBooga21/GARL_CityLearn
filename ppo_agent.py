@@ -94,7 +94,7 @@ class SingleBuildingEnvWrapper(gym.Wrapper):
             return self._base_env.close()
         return self.env.close()
 
-def run_ppo_training(schema_path):
+def run_ppo_training(schema_path, run_id: str):
     """
     Trains a PPO agent.
     """
@@ -119,25 +119,14 @@ def run_ppo_training(schema_path):
 
     print("PPO training finished.")
 
-    
-
-def run_ppo_evaluation(schema_path):
+def run_ppo_evaluation(schema_path, run_id: str):
     """
     Evaluates a trained PPO agent.
     """
     print("\n--- PPO Evaluation ---")
 
-    # Create a single-building environment for evaluation
-    output_dir = Path(config.BASE_OUTPUT_DIR) # Base output directory
-    
-    # Clear output directory before evaluation
-    if output_dir.exists():
-        for item in output_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                import shutil
-                shutil.rmtree(item)
+    # Use the run_id to create a unique output directory
+    output_dir = Path(config.BASE_OUTPUT_DIR) / run_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     eval_env = CityLearnEnv(
@@ -146,8 +135,8 @@ def run_ppo_evaluation(schema_path):
         episode_time_steps=config.EPISODE_TIME_STEPS,  # CRITICAL: Set episode length
         reward_function=GridConsumptionReward,
         render_mode='end', # Ensure render_mode is set to 'end'
-        render_directory=Path.cwd() / output_dir, # Files go directly here
-        render_session_name='' # Empty string = no subdirectory
+        render_directory=Path.cwd() / Path(config.BASE_OUTPUT_DIR), # Base directory for all runs
+        render_session_name=run_id # This will create the unique subdirectory
     )
 
     eval_env.buildings = [eval_env.buildings[0]]
@@ -181,26 +170,7 @@ def run_ppo_evaluation(schema_path):
     # CRITICAL: Close the environment to trigger rendering
     eval_env.close()
     
-    # CityLearn might create a timestamp subdirectory even with render_session_name=''
-    # So we need to move files from any subdirectories to the main output_dir
-    if output_dir.exists():
-        for subdir in output_dir.iterdir():
-            if subdir.is_dir():
-                # Found a subdirectory (likely timestamp-based)
-                print(f"Found subdirectory: {subdir.name}, moving files to {output_dir}")
-                for file in subdir.iterdir():
-                    if file.is_file():
-                        # Move file to parent directory
-                        import shutil
-                        shutil.move(str(file), str(output_dir / file.name))
-                # Remove the empty subdirectory
-                subdir.rmdir()
-                print(f"Moved files from {subdir.name} to {output_dir}")
-    
     print(f"PPO evaluation finished. Simulation data saved to {output_dir}")
-    
-    # Files are already in the right location, no need to copy
-    # copy_output_files(output_dir, run_name)
     
     # Return the base environment for KPI calculation
     return base_eval_env
