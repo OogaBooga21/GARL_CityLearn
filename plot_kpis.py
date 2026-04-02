@@ -60,14 +60,13 @@ KPI_METADATA = {
     }
 }
 
-def generate_plots():
+def generate_available_data():
     """
-    Scans for simulation runs, generates interactive plots for all KPIs,
-    and creates a dynamic index.html file to view and compare them.
+    Scans for simulation runs and generates a JSON file with the available runs and KPIs.
     """
     kpi_base_dir = Path(config.KPI_OUTPUT_DIR)
-    output_plot_dir = Path('gui/plots')
-    output_plot_dir.mkdir(exist_ok=True)
+    output_data_file = Path('gui/available_data.json')
+    output_data_file.parent.mkdir(exist_ok=True)
 
     available_runs = []
     available_kpis = {}
@@ -76,76 +75,27 @@ def generate_plots():
         print(f"KPI directory not found: {kpi_base_dir}")
         return
 
-    # --- 1. Scan for runs and generate plots ---
     for run_dir in kpi_base_dir.iterdir():
         if run_dir.is_dir():
             run_id = run_dir.name
             available_runs.append(run_id)
             available_kpis[run_id] = []
-            
-            run_plot_dir = output_plot_dir / run_id
-            run_plot_dir.mkdir(exist_ok=True)
 
             for kpi_file in run_dir.glob("*.csv"):
-                df = pd.read_csv(kpi_file)
                 file_name = kpi_file.stem
-                plot_file_name = f'{file_name}.html'
-
-                metadata = KPI_METADATA.get(file_name, {'title': file_name.replace("_", " ").title(), 'description': ''})
+                metadata = KPI_METADATA.get(file_name, {'title': file_name.replace("_", " ").title()})
                 title = metadata['title']
-                description = metadata['description']
+                available_kpis[run_id].append({'name': title, 'path': file_name})
 
-                fig = None
-                if file_name == 'summary_kpis':
-                    fig = go.Figure(data=[go.Table(
-                        header=dict(values=list(df.columns), fill_color='#d2b48c', align='left'),
-                        cells=dict(values=[df[col] for col in df.columns], fill_color='#e8e4c9', align='left'))
-                    ])
-                elif 'timestamp' in df.columns:
-                    fig = px.line(df, x='timestamp', y=df.columns[1:])
-                
-                if fig:
-                    fig.update_layout(
-                        title_text=f"<b>{title}</b><br><sub>{description}</sub>",
-                        plot_bgcolor='white',
-                        paper_bgcolor='white',
-                        font_color='black',
-                        legend_title_text='Buildings',
-                        margin=dict(l=40, r=40, t=80, b=40) # Adjust margins
-                    )
-                    
-                    # Generate a minimal HTML file for the plot
-                    fig.write_html(run_plot_dir / plot_file_name, full_html=False, include_plotlyjs='cdn')
+    output_data = {
+        'runs': sorted(available_runs, reverse=True),
+        'kpis': available_kpis
+    }
 
-                    available_kpis[run_id].append({'name': title, 'path': plot_file_name})
-                else:
-                    print(f"Skipping {kpi_file} as it could not be plotted.")
-    
-    # --- 2. Create the main index.html ---
-    try:
-        with open('gui/index.template.html', 'r') as f:
-            template = f.read()
-    except FileNotFoundError:
-        print("Could not find gui/index.template.html template. Please ensure it exists.")
-        return
+    with open(output_data_file, 'w') as f:
+        json.dump(output_data, f, indent=4)
 
-    # Inject the dynamic data into the template
-    js_available_runs = json.dumps(sorted(available_runs, reverse=True))
-    js_available_kpis = json.dumps(available_kpis)
-    
-    final_html = template.replace(
-        'const availableRuns = [];',
-        f'const availableRuns = {js_available_runs};'
-    ).replace(
-        'const availableKPIs = {};',
-        f'const availableKPIs = {js_available_kpis};'
-    )
-
-    with open('gui/index.html', 'w') as f:
-        f.write(final_html)
-
-    print("\nPlots generated successfully in the 'gui/plots' directory.")
-    print("Open 'gui/index.html' in your browser to view the dashboard.")
+    print(f"\nAvailable data generated successfully in {output_data_file}")
 
 if __name__ == '__main__':
-    generate_plots()
+    generate_available_data()

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KPI Dashboard</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
 
@@ -17,143 +18,187 @@
         <!-- Views will be dynamically inserted here -->
     </div>
 
+    <!-- Modal for adding a new trace -->
+    <div id="addTraceModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Add Metric to Plot</h2>
+            <select id="modalRunSelector"></select>
+            <select id="modalKpiSelector"></select>
+            <input type="color" id="modalColorPicker" value="#ff0000">
+            <button id="addTraceBtn">Add Trace</button>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const dashboard = document.getElementById('dashboard');
             const addViewBtn = document.getElementById('addViewBtn');
+            const modal = document.getElementById('addTraceModal');
+            const closeModal = document.querySelector('.close-button');
+            const addTraceBtn = document.getElementById('addTraceBtn');
+            const modalRunSelector = document.getElementById('modalRunSelector');
+            const modalKpiSelector = document.getElementById('modalKpiSelector');
+            const modalColorPicker = document.getElementById('modalColorPicker');
 
-            // These will be populated by the Python script
-            const availableRuns = ["RBC_yhkm_20260307_233757", "RBC_plld_20260307_233041", "RBC_eveh_20260307_232232", "RBC_acrj_20260307_233230", "RBC_2_zyfy_20260307_234643", "RBC_2_ydoh_20260308_000122", "RBC_2_xrqd_20260307_234235", "RBC_2_xnmr_20260308_103505", "RBC_2_wfsg_20260308_000624", "RBC_2_volh_20260308_003435", "RBC_2_vbvp_20260308_001003", "RBC_2_unje_20260307_235729", "RBC_2_thxh_20260308_002033", "RBC_2_scih_20260308_001841", "RBC_2_sajc_20260308_003852", "RBC_2_rrcr_20260308_001159", "RBC_2_rhpm_20260308_002308", "RBC_2_qubr_20260307_232031", "RBC_2_ojav_20260308_102853", "RBC_2_nufz_20260307_234941", "RBC_2_nlqi_20260308_103945", "RBC_2_ndmq_20260308_003125", "RBC_2_mjsj_20260308_001458", "RBC_2_mfno_20260308_001707", "RBC_2_kqnh_20260308_103025", "RBC_2_gzbu_20260308_000442", "RBC_2_firc_20260308_001328", "RBC_2_dmlg_20260308_001543", "RBC_2_ciip_20260308_002604"];
-            const availableKPIs = {"RBC_2_qubr_20260307_232031": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_eveh_20260307_232232": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_plld_20260307_233041": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_acrj_20260307_233230": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_yhkm_20260307_233757": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_xrqd_20260307_234235": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_zyfy_20260307_234643": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_nufz_20260307_234941": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_unje_20260307_235729": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_ydoh_20260308_000122": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_gzbu_20260308_000442": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_wfsg_20260308_000624": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_vbvp_20260308_001003": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_rrcr_20260308_001159": [], "RBC_2_firc_20260308_001328": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_mjsj_20260308_001458": [], "RBC_2_dmlg_20260308_001543": [], "RBC_2_mfno_20260308_001707": [], "RBC_2_scih_20260308_001841": [], "RBC_2_thxh_20260308_002033": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_rhpm_20260308_002308": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_ciip_20260308_002604": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_ndmq_20260308_003125": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_volh_20260308_003435": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_sajc_20260308_003852": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_ojav_20260308_102853": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_kqnh_20260308_103025": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_xnmr_20260308_103505": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}], "RBC_2_nlqi_20260308_103945": [{"name": "Grid Consumption", "path": "grid_consumption.html"}, {"name": "Total Grid Consumption", "path": "total_grid_consumption.html"}, {"name": "Building Load", "path": "load.html"}, {"name": "Total Building Load", "path": "total_load.html"}, {"name": "Electricity Cost", "path": "cost.html"}, {"name": "Total Electricity Cost", "path": "total_cost.html"}, {"name": "PV Generation", "path": "pv_generation.html"}, {"name": "Total PV Generation", "path": "total_pv_generation.html"}, {"name": "Electrical Storage SoC", "path": "electrical_storage_soc.html"}, {"name": "Total Electrical Storage SoC", "path": "total_electrical_storage_soc.html"}, {"name": "Electrical Storage Action", "path": "electrical_storage_action.html"}, {"name": "Total Electrical Storage Action", "path": "total_electrical_storage_action.html"}, {"name": "Summary KPIs", "path": "summary_kpis.html"}]};
-
-            // --- State Management ---
+            let availableRuns = [];
+            let availableKPIs = {};
             let viewStates = [];
+            let activeView = null;
 
-            function saveState() {
-                localStorage.setItem('dashboardState', JSON.stringify(viewStates));
-            }
+            async function fetchInitialData() {
+                const response = await fetch('available_data.json');
+                const data = await response.json();
+                availableRuns = data.runs;
+                availableKPIs = data.kpis;
 
-            function loadState() {
-                const savedState = localStorage.getItem('dashboardState');
-                if (savedState) {
-                    return JSON.parse(savedState);
+                populateRunSelector(modalRunSelector, availableRuns);
+                modalRunSelector.addEventListener('change', () => {
+                    populateKpiSelector(modalKpiSelector, availableKPIs[modalRunSelector.value]);
+                });
+                if (availableRuns.length > 0) {
+                    populateKpiSelector(modalKpiSelector, availableKPIs[availableRuns[0]]);
                 }
-                // Default to one view if no state is saved
-                return [{ run: availableRuns[0] || '', kpi: '' }];
             }
 
-            // --- View Creation ---
+            function populateRunSelector(selector, runs) {
+                selector.innerHTML = '';
+                runs.forEach(runId => {
+                    const option = new Option(runId, runId);
+                    selector.add(option);
+                });
+            }
+
+            function populateKpiSelector(selector, kpis) {
+                selector.innerHTML = '';
+                if (kpis) {
+                    kpis.forEach(kpi => {
+                        const option = new Option(kpi.name, kpi.path);
+                        selector.add(option);
+                    });
+                }
+            }
+
             function createView(state, index) {
                 const view = document.createElement('div');
                 view.className = 'view';
                 view.dataset.id = index;
 
-                // Header
                 const header = document.createElement('div');
                 header.className = 'view-header';
 
-                // Run Selector
-                const runSelector = document.createElement('select');
-                runSelector.className = 'run-selector';
-                availableRuns.forEach(runId => {
-                    const option = new Option(runId, runId, false, runId === state.run);
-                    runSelector.add(option);
-                });
-                runSelector.addEventListener('change', (e) => {
-                    viewStates[index].run = e.target.value;
-                    // When run changes, reset KPI and update KPI selector
-                    viewStates[index].kpi = ''; 
-                    updateKPISelector(view, viewStates[index]);
-                    updatePlot(view, viewStates[index]);
-                    saveState();
+                const tokenContainer = document.createElement('div');
+                tokenContainer.className = 'token-container';
+
+                const addTraceModalBtn = document.createElement('button');
+                addTraceModalBtn.innerText = '+';
+                addTraceModalBtn.addEventListener('click', () => {
+                    activeView = view;
+                    modal.style.display = 'block';
                 });
 
-                // KPI Selector
-                const kpiSelector = document.createElement('select');
-                kpiSelector.className = 'kpi-selector';
-                kpiSelector.addEventListener('change', (e) => {
-                    viewStates[index].kpi = e.target.value;
-                    updatePlot(view, viewStates[index]);
-                    saveState();
-                });
-
-                // Close Button
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'close-btn';
                 closeBtn.innerHTML = '&times;';
-                closeBtn.addEventListener('click', () => {
-                    removeView(index);
-                });
+                closeBtn.addEventListener('click', () => removeView(index));
 
-                header.appendChild(runSelector);
-                header.appendChild(kpiSelector);
+                header.appendChild(addTraceModalBtn);
+                header.appendChild(tokenContainer);
                 header.appendChild(closeBtn);
 
-                // Plot Container
                 const plotContainer = document.createElement('div');
                 plotContainer.className = 'plot-container';
-                const iframe = document.createElement('iframe');
-                plotContainer.appendChild(iframe);
-
+                
                 view.appendChild(header);
                 view.appendChild(plotContainer);
 
                 dashboard.appendChild(view);
-
-                // Initial population
-                updateKPISelector(view, state);
-                updatePlot(view, state);
+                
+                Plotly.newPlot(plotContainer, [], {title: 'Blank Canvas'});
             }
 
-            // --- Update Functions ---
-            function updateKPISelector(view, state) {
-                const kpiSelector = view.querySelector('.kpi-selector');
-                kpiSelector.innerHTML = '<option value="">Select KPI</option>';
-                const kpisForRun = availableKPIs[state.run] || [];
-                kpisForRun.forEach(kpi => {
-                    const option = new Option(kpi.name, kpi.path, false, kpi.path === state.kpi);
-                    kpiSelector.add(option);
-                });
-            }
+            function generateColorShades(hexColor, count) {
+                const shades = [];
+                const baseColor = parseInt(hexColor.slice(1), 16);
+                let r = (baseColor >> 16) & 255;
+                let g = (baseColor >> 8) & 255;
+                let b = baseColor & 255;
 
-            function updatePlot(view, state) {
-                const iframe = view.querySelector('iframe');
-                if (state.run && state.kpi) {
-                    iframe.src = `plots/${state.run}/${state.kpi}`;
-                } else {
-                    iframe.src = 'about:blank';
+                for (let i = 0; i < count; i++) {
+                    const factor = 1 - (i * 0.1);
+                    const newR = Math.max(0, Math.min(255, r * factor));
+                    const newG = Math.max(0, Math.min(255, g * factor));
+                    const newB = Math.max(0, Math.min(255, b * factor));
+                    shades.push(`rgb(${newR},${newG},${newB})`);
                 }
+                return shades;
             }
-            
-            // --- View Management ---
+
+            async function addTraceToPlot() {
+                if (!activeView) return;
+
+                const run = modalRunSelector.value;
+                const kpi = modalKpiSelector.value;
+                const color = modalColorPicker.value;
+                const plotContainer = activeView.querySelector('.plot-container');
+                const tokenContainer = activeView.querySelector('.token-container');
+
+                const response = await fetch(`/api/kpi/${run}/${kpi}`);
+                const data = await response.json();
+
+                const yCols = Object.keys(data).filter(k => k !== 'timestamp');
+                const shades = generateColorShades(color, yCols.length);
+
+                yCols.forEach((col, i) => {
+                    Plotly.addTraces(plotContainer, {
+                        x: data.timestamp,
+                        y: data[col],
+                        name: `${run} - ${col}`,
+                        line: { color: shades[i] }
+                    });
+                });
+
+                const token = document.createElement('span');
+                token.className = 'metric-token';
+                token.innerText = `${run} - ${kpi}`;
+                token.style.backgroundColor = color;
+                tokenContainer.appendChild(token);
+
+                modal.style.display = 'none';
+            }
+
             function renderDashboard() {
                 dashboard.innerHTML = '';
-                viewStates.forEach((state, index) => {
-                    createView(state, index);
-                });
+                viewStates.forEach((state, index) => createView(state, index));
             }
 
             function addView() {
-                const newRun = availableRuns.length > 0 ? availableRuns[0] : '';
-                viewStates.push({ run: newRun, kpi: '' });
-                saveState();
+                viewStates.push({});
                 renderDashboard();
             }
 
             function removeView(index) {
                 viewStates.splice(index, 1);
-                saveState();
                 renderDashboard();
             }
 
-            // --- Initialization ---
             function init() {
                 addViewBtn.addEventListener('click', addView);
-                viewStates = loadState();
-                if (viewStates.length === 0 && availableRuns.length > 0) {
-                   viewStates = [{ run: availableRuns[0] || '', kpi: '' }];
-                }
-                renderDashboard();
+                closeModal.addEventListener('click', () => modal.style.display = 'none');
+                addTraceBtn.addEventListener('click', addTraceToPlot);
+                window.addEventListener('click', (event) => {
+                    if (event.target == modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+
+                fetchInitialData().then(() => {
+                    if (viewStates.length === 0) {
+                        addView();
+                    } else {
+                        renderDashboard();
+                    }
+                });
             }
 
             init();
