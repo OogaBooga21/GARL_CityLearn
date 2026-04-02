@@ -4,51 +4,34 @@ from citylearn.citylearn import CityLearnEnv
 from translation_layer import TranslationLayer
 import config # Import config
 
-import json
-import numpy as np
-from pathlib import Path
-from citylearn.citylearn import CityLearnEnv
-from translation_layer import TranslationLayer
-import config # Import config
-
 class IntelligentRBC:
     """
-    A more intelligent Rule-Based Controller that uses a standardized action space.
+    A more intelligent Rule-Based Controller that uses a standardized action space
+    and reacts to predicted environmental conditions.
     """
     def __init__(self, action_space, observation_names):
         self.action_space = action_space
         self.observation_indices = {obs: i for i, obs in enumerate(observation_names)}
+        
+        # Define thresholds
+        self.solar_threshold = 50.0  # W/m^2
 
     def predict(self, observations):
         """
         Returns a standardized 3-element action vector [cooling, dhw, electrical].
-        The logic is to charge/discharge the battery based on the time of day,
-        solar generation, and electrical storage state of charge.
+        The logic is to charge/discharge the battery based on the time of day.
         """
-        hour = observations[self.observation_indices['hour']]
-        
-        if 'solar_generation' in self.observation_indices:
-            solar_generation = observations[self.observation_indices['solar_generation']]
-        else:
-            solar_generation = 0
-            
-        electrical_storage_soc = observations[self.observation_indices['electrical_storage_soc']]
+        hour = observations[2]
         
         # Standard action: [cooling, dhw, electrical]
         action = np.zeros(3)
         
-        # Peak hours: 16:00 - 20:00
-        if 16 <= hour < 20:
-            if electrical_storage_soc > 0.2:
-                action[2] = -1.0  # Discharge
-        # Off-peak hours: 00:00 - 07:00
-        elif 0 <= hour < 7:
-            if electrical_storage_soc < 0.8:
-                action[2] = 1.0  # Charge
-        # Daytime hours: 07:00 - 16:00
-        elif 7 <= hour < 16:
-            if solar_generation > 0.2 and electrical_storage_soc < 0.95:
-                action[2] = 1.0  # Charge
+        if 1 <= hour < 12:
+            # Charge the battery
+            action[2] = -0.5
+        elif 12 <= hour < 23:
+            # Discharge the battery
+            action[2] = 0.5
 
         return action
 
@@ -56,18 +39,17 @@ def run_rbc_2_simulation(schema_path, episode_time_steps: int, central_agent: bo
     """
     Runs a CityLearn simulation with the given parameters using an RBC agent.
     """
-    # Create a unique directory for this run's output
-    output_dir = Path(config.BASE_OUTPUT_DIR)
-    kpi_output_dir = Path(config.KPI_OUTPUT_DIR) / run_id
-    
-    # The render_directory is the base, and render_session_name is the unique run_id
+    # Use the run_id to create a unique output directory
+    output_dir = Path(config.BASE_OUTPUT_DIR) / run_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     env = CityLearnEnv(
         schema_path,
         central_agent=central_agent,
         episode_time_steps=episode_time_steps,
         render_mode='end',
-        render_directory=Path.cwd() / output_dir, 
-        render_session_name=run_id 
+        render_directory=Path.cwd() / Path(config.BASE_OUTPUT_DIR), # Base directory for all runs
+        render_session_name=run_id # This will create the unique subdirectory
     )
 
     # Initialize the translation layer
@@ -88,5 +70,4 @@ def run_rbc_2_simulation(schema_path, episode_time_steps: int, central_agent: bo
     
     env.close() # Ensure environment is closed to finalize output files
 
-    run_output_dir = output_dir / run_id
-    print(f"RBC Simulation finished. Output saved to {run_output_dir}")
+    print(f"RBC Simulation finished. Output saved to {output_dir}")
