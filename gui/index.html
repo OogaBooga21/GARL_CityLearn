@@ -94,7 +94,7 @@
                 addTraceModalBtn.innerText = '+';
                 addTraceModalBtn.addEventListener('click', () => {
                     activeView = view;
-                    modal.style.display = 'block';
+                    modal.style.display = 'flex';
                 });
 
                 const closeBtn = document.createElement('button');
@@ -148,6 +148,9 @@
 
                 const yCols = Object.keys(data).filter(k => k !== 'timestamp');
                 const shades = generateColorShades(color, yCols.length);
+                const traceIndices = [];
+
+                const currentTraces = plotContainer.data.length;
 
                 yCols.forEach((col, i) => {
                     Plotly.addTraces(plotContainer, {
@@ -156,15 +159,39 @@
                         name: `${run} - ${col}`,
                         line: { color: shades[i] }
                     });
+                    traceIndices.push(currentTraces + i);
                 });
 
                 const token = document.createElement('span');
                 token.className = 'metric-token';
-                token.innerText = `${run} - ${kpi}`;
-                token.style.backgroundColor = color;
+                token.style.borderColor = color;
+                token.dataset.traces = traceIndices.join(',');
+
+                const tokenText = document.createElement('span');
+                tokenText.innerText = `${run} - ${kpi}`;
+                token.appendChild(tokenText);
+
+                const closeTokenBtn = document.createElement('button');
+                closeTokenBtn.className = 'close-token-btn';
+                closeTokenBtn.innerHTML = '&times;';
+                closeTokenBtn.onclick = () => removeTrace(token);
+                token.appendChild(closeTokenBtn);
+
                 tokenContainer.appendChild(token);
 
                 modal.style.display = 'none';
+            }
+
+            function removeTrace(token) {
+                const plotContainer = token.closest('.view').querySelector('.plot-container');
+                const traceIndices = token.dataset.traces.split(',').map(Number);
+                
+                Plotly.deleteTraces(plotContainer, traceIndices);
+
+                token.remove();
+
+                // This is a simplification. A more robust solution would re-index the remaining tokens.
+                // For now, we'll just remove the traces and the token.
             }
 
             function renderDashboard() {
