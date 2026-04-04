@@ -43,8 +43,8 @@
 
             let availableRuns = [];
             let availableKPIs = {};
-            let viewStates = [];
-            let activeView = null;
+            let viewStates = []; // Each state will now include a 'metrics' array
+            let activeView = null; // The view currently interacting with the modal
 
             async function fetchInitialData() {
                 const response = await fetch('available_data.json');
@@ -115,6 +115,9 @@
                 dashboard.appendChild(view);
                 
                 Plotly.newPlot(plotContainer, [], {title: 'Blank Canvas'});
+
+                // Render existing tokens if any
+                renderTokens(view, index);
             }
 
             function generateColorShades(hexColor, count) {
@@ -125,10 +128,11 @@
                 let b = baseColor & 255;
 
                 for (let i = 0; i < count; i++) {
-                    const factor = 1 - (i * 0.1);
-                    const newR = Math.max(0, Math.min(255, r * factor));
-                    const newG = Math.max(0, Math.min(255, g * factor));
-                    const newB = Math.max(0, Math.min(255, b * factor));
+                    // Adjust factor to create more distinct shades
+                    const factor = 1 - (i * 0.08); // Smaller step for more shades
+                    const newR = Math.max(0, Math.min(255, Math.round(r * factor)));
+                    const newG = Math.max(0, Math.min(255, Math.round(g * factor)));
+                    const newB = Math.max(0, Math.min(255, Math.round(b * factor)));
                     shades.push(`rgb(${newR},${newG},${newB})`);
                 }
                 return shades;
@@ -141,57 +145,88 @@
                 const kpi = modalKpiSelector.value;
                 const color = modalColorPicker.value;
                 const plotContainer = activeView.querySelector('.plot-container');
-                const tokenContainer = activeView.querySelector('.token-container');
+                const viewIndex = parseInt(activeView.dataset.id);
 
                 const response = await fetch(`/api/kpi/${run}/${kpi}`);
                 const data = await response.json();
 
                 const yCols = Object.keys(data).filter(k => k !== 'timestamp');
                 const shades = generateColorShades(color, yCols.length);
-                const traceIndices = [];
-
-                const currentTraces = plotContainer.data.length;
+                const traceNames = [];
 
                 yCols.forEach((col, i) => {
+                    const traceName = `${run} - ${col}`;
                     Plotly.addTraces(plotContainer, {
                         x: data.timestamp,
                         y: data[col],
-                        name: `${run} - ${col}`,
+                        name: traceName,
                         line: { color: shades[i] }
                     });
-                    traceIndices.push(currentTraces + i);
+                    traceNames.push(traceName);
                 });
 
-                const token = document.createElement('span');
-                token.className = 'metric-token';
-                token.style.borderColor = color;
-                token.dataset.traces = traceIndices.join(',');
-
-                const tokenText = document.createElement('span');
-                tokenText.innerText = `${run} - ${kpi}`;
-                token.appendChild(tokenText);
-
-                const closeTokenBtn = document.createElement('button');
-                closeTokenBtn.className = 'close-token-btn';
-                closeTokenBtn.innerHTML = '&times;';
-                closeTokenBtn.onclick = () => removeTrace(token);
-                token.appendChild(closeTokenBtn);
-
-                tokenContainer.appendChild(token);
-
+                // Store metric info in viewStates
+                if (!viewStates[viewIndex].metrics) {
+                    viewStates[viewIndex].metrics = [];
+                }
+                viewStates[viewIndex].metrics.push({ run, kpi, color, traceNames });
+                
+                renderTokens(activeView, viewIndex); // Re-render tokens for the active view
                 modal.style.display = 'none';
             }
 
-            function removeTrace(token) {
-                const plotContainer = token.closest('.view').querySelector('.plot-container');
-                const traceIndices = token.dataset.traces.split(',').map(Number);
+            function removeTrace(viewIndex, metricIndex) {
+                const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
+                const plotContainer = view.querySelector('.plot-container');
+                const metricToRemove = viewStates[viewIndex].metrics[metricIndex];
+
+                if (!metricToRemove) return;
+
+                // Get current trace names in the plot
+                const currentPlotTraces = plotContainer.data.map(trace => trace.name);
+                const indicesToDelete = [];
+
+                metricToRemove.traceNames.forEach(name => {
+                    const idx = currentPlotTraces.indexOf(name);
+                    if (idx !== -1) {
+                        indicesToDelete.push(idx);
+                    }
+                });
                 
-                Plotly.deleteTraces(plotContainer, traceIndices);
+                // Sort in descending order to avoid index shifting issues during deletion
+                indicesToDelete.sort((a, b) => b - a);
 
-                token.remove();
+                Plotly.deleteTraces(plotContainer, indicesToDelete);
 
-                // This is a simplification. A more robust solution would re-index the remaining tokens.
-                // For now, we'll just remove the traces and the token.
+                // Remove the metric from viewStates
+                viewStates[viewIndex].metrics.splice(metricIndex, 1);
+
+                renderTokens(view, viewIndex); // Re-render tokens for the active view
+            }
+
+            function renderTokens(view, viewIndex) {
+                const tokenContainer = view.querySelector('.token-container');
+                tokenContainer.innerHTML = ''; // Clear existing tokens
+
+                const metrics = viewStates[viewIndex].metrics || [];
+
+                metrics.forEach((metric, metricIndex) => {
+                    const token = document.createElement('span');
+                    token.className = 'metric-token';
+                    token.style.borderColor = metric.color;
+
+                    const tokenText = document.createElement('span');
+                    tokenText.innerText = `${metric.run} - ${metric.kpi}`;
+                    token.appendChild(tokenText);
+
+                    const closeTokenBtn = document.createElement('button');
+                    closeTokenBtn.className = 'close-token-btn';
+                    closeTokenBtn.innerHTML = '&times;';
+                    closeTokenBtn.onclick = () => removeTrace(viewIndex, metricIndex);
+                    token.appendChild(closeTokenBtn);
+
+                    tokenContainer.appendChild(token);
+                });
             }
 
             function renderDashboard() {
@@ -200,7 +235,7 @@
             }
 
             function addView() {
-                viewStates.push({});
+                viewStates.push({ metrics: [] }); // Initialize new view with empty metrics array
                 renderDashboard();
             }
 
@@ -210,6 +245,7 @@
             }
 
             function init() {
+                modal.style.display = 'none'; // Ensure modal is hidden on initial load
                 addViewBtn.addEventListener('click', addView);
                 closeModal.addEventListener('click', () => modal.style.display = 'none');
                 addTraceBtn.addEventListener('click', addTraceToPlot);
