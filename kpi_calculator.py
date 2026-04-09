@@ -1,4 +1,3 @@
-
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -15,7 +14,6 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
     for bid in building_ids:
         try:
             df = pd.read_csv(output_dir / f'exported_data_building_{bid}_ep0.csv', index_col='timestamp')
-            print(f"Columns for building {bid}: {df.columns.tolist()}") # Print columns
             all_building_dfs.append(df)
         except FileNotFoundError:
             print(f"Could not find exported_data_building_{bid}_ep0.csv in {output_dir}")
@@ -23,16 +21,20 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
             
     # --- Prepare DataFrames for each KPI ---
     
-    # Grid Consumption
-    grid_consumption_df = pd.concat([df[['Net Electricity Consumption-kWh']].rename(columns={'Net Electricity Consumption-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
+    # Net Energy Exchange (formerly Grid Consumption)
+    net_energy_exchange_df = pd.concat([df[['Net Electricity Consumption-kWh']].rename(columns={'Net Electricity Consumption-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
+
+    # Energy Export
+    energy_export_df = net_energy_exchange_df.copy()
+    energy_export_df[energy_export_df > 0] = 0
+    energy_export_df = energy_export_df.abs()
 
     # Load
     load_df = pd.concat([df[['Non-shiftable Load-kWh']].rename(columns={'Non-shiftable Load-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
 
     # PV Generation
-    # Using 'Energy Production from PV-kWh' directly as it is already in kWh.
     pv_df = pd.concat([df[['Energy Production from PV-kWh']].rename(columns={'Energy Production from PV-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
-    pv_df = pv_df.abs() # Ensure PV generation is positive
+    pv_df = pv_df.abs()
 
     # --- Read battery files ---
     all_battery_dfs = []
@@ -41,7 +43,6 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
             df = pd.read_csv(output_dir / f'exported_data_building_{bid}_battery_ep0.csv', index_col='timestamp')
             all_battery_dfs.append(df)
         except FileNotFoundError:
-            # Not all buildings have batteries
             all_battery_dfs.append(pd.DataFrame())
             
     # SOC
@@ -52,17 +53,20 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
     action_df = pd.concat([df[['Battery (Dis)Charge-kWh']].rename(columns={'Battery (Dis)Charge-kWh': f'Building_{i+1}'}) if not df.empty else pd.DataFrame(index=all_building_dfs[0].index, columns=[f'Building_{i+1}']) for i, df in enumerate(all_battery_dfs)], axis=1)
     action_df = action_df.fillna(0)
 
+    # Battery Discharge
+    battery_discharge_df = action_df.copy()
+    battery_discharge_df[battery_discharge_df > 0] = 0
+    battery_discharge_df = battery_discharge_df.abs()
+
     # Cost
     price = 0.33 # Default static price
-    dynamic_price_df = pd.DataFrame(index=grid_consumption_df.index)
+    dynamic_price_df = pd.DataFrame(index=net_energy_exchange_df.index)
 
-    # Check for price.csv or prices.csv
     price_file_found = False
     for price_filename in ['price.csv', 'prices.csv']:
         price_filepath = output_dir / price_filename
         if price_filepath.exists():
             try:
-                # Assuming price file contains a 'price' column
                 dynamic_price_df = pd.read_csv(price_filepath, index_col='timestamp')
                 if 'price' in dynamic_price_df.columns:
                     price = dynamic_price_df['price']
@@ -75,7 +79,6 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
                 print(f"Error reading {price_filename}: {e}. Using static price.")
     
     if not price_file_found:
-        # Check community_df for price information if no separate price file is found
         try:
             community_df = pd.read_csv(output_dir / f'exported_data_community_ep0.csv', index_col='timestamp')
             if 'Electricity Pricing-$/kWh' in community_df.columns:
@@ -86,38 +89,37 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
         except (FileNotFoundError, KeyError):
             print("Could not find community data for dynamic pricing. Using static price.")
 
-    cost_df = grid_consumption_df.multiply(price, axis='index')
+    cost_df = net_energy_exchange_df.multiply(price, axis='index')
 
     # Carbon Emissions
     try:
         community_df = pd.read_csv(output_dir / f'exported_data_community_ep0.csv', index_col='timestamp')
         carbon_intensity = community_df['Carbon Intensity-kg_CO2/kWh']
-        carbon_df = grid_consumption_df.multiply(carbon_intensity, axis='index')
+        carbon_df = net_energy_exchange_df.multiply(carbon_intensity, axis='index')
     except (FileNotFoundError, KeyError):
         print("Could not find carbon intensity data. Carbon emissions will not be calculated.")
-        carbon_df = pd.DataFrame(index=grid_consumption_df.index)
+        carbon_df = pd.DataFrame(index=net_energy_exchange_df.index)
 
     # --- Save KPIs ---
     kpi_dfs = {
-        'grid_consumption': grid_consumption_df,
+        'net_energy_exchange': net_energy_exchange_df,
+        'energy_export': energy_export_df,
         'load': load_df,
         'cost': cost_df,
         'carbon_emissions': carbon_df,
         'pv_generation': pv_df,
         'electrical_storage_soc': soc_df,
         'electrical_storage_action': action_df,
+        'battery_discharge': battery_discharge_df,
     }
 
-    # Create the KPI output directory if it doesn't exist
     kpi_output_dir.mkdir(parents=True, exist_ok=True)
 
     for kpi_name, df in kpi_dfs.items():
         if not df.empty:
             df.to_csv(kpi_output_dir / f'{kpi_name}.csv', index_label='timestamp')
             
-            # Save total KPI, with special handling for SoC
             if kpi_name == 'electrical_storage_soc':
-                # Calculate weighted average SoC
                 battery_capacities = [b.electrical_storage.capacity if b.electrical_storage is not None else 0 for b in env.buildings]
                 total_capacity = sum(battery_capacities)
                 
@@ -126,7 +128,6 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
                     total_df = pd.DataFrame(weighted_soc, columns=['weighted_average_soc'])
                     total_df.to_csv(kpi_output_dir / f'total_{kpi_name}.csv', index_label='timestamp')
                 else:
-                    # If no batteries, save an empty or zero dataframe
                     total_df = pd.DataFrame(0, index=df.index, columns=['weighted_average_soc'])
                     total_df.to_csv(kpi_output_dir / f'total_{kpi_name}.csv', index_label='timestamp')
             else:
@@ -144,37 +145,30 @@ def calculate_and_save_summary_kpis(kpi_output_dir: Path):
     """
     summary_data = {}
 
-    # Total Cost
     total_cost_df = pd.read_csv(kpi_output_dir / 'total_cost.csv')
     summary_data['total_cost'] = total_cost_df['cost'].sum()
 
-    # Total Carbon Emissions
     try:
         total_carbon_df = pd.read_csv(kpi_output_dir / 'total_carbon_emissions.csv')
         summary_data['total_carbon_emissions'] = total_carbon_df['carbon_emissions'].sum()
     except FileNotFoundError:
         summary_data['total_carbon_emissions'] = 0
 
-    # Max Consumption
-    total_grid_consumption_df = pd.read_csv(kpi_output_dir / 'total_grid_consumption.csv')
-    summary_data['max_consumption'] = total_grid_consumption_df['grid_consumption'].max()
+    total_net_energy_exchange_df = pd.read_csv(kpi_output_dir / 'total_net_energy_exchange.csv')
+    summary_data['max_consumption'] = total_net_energy_exchange_df['net_energy_exchange'].max()
 
-    # Max Load
     total_load_df = pd.read_csv(kpi_output_dir / 'total_load.csv')
     summary_data['max_load'] = total_load_df['load'].max()
 
-    # Total PV Generation
     total_pv_generation_df = pd.read_csv(kpi_output_dir / 'total_pv_generation.csv')
     summary_data['total_pv_generation'] = total_pv_generation_df['pv_generation'].sum()
 
-    # Weighted Average SoC
     try:
         weighted_soc_df = pd.read_csv(kpi_output_dir / 'total_electrical_storage_soc.csv')
         summary_data['average_electrical_storage_soc'] = weighted_soc_df['weighted_average_soc'].mean()
     except FileNotFoundError:
         summary_data['average_electrical_storage_soc'] = 0
 
-    # Battery Charge/Discharge
     electrical_storage_action_df = pd.read_csv(kpi_output_dir / 'electrical_storage_action.csv')
     
     total_charged = 0
@@ -193,7 +187,6 @@ def calculate_and_save_summary_kpis(kpi_output_dir: Path):
     summary_data['total_charged'] = total_charged
     summary_data['total_discharged'] = abs(total_discharged)
 
-    # Create DataFrame and save to CSV
     summary_df = pd.DataFrame([summary_data])
     summary_df.to_csv(kpi_output_dir / 'summary_kpis.csv', index=False)
 

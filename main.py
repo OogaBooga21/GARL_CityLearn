@@ -5,7 +5,7 @@ import config
 from ppo_agent import run_ppo_training, run_ppo_evaluation
 from rbc_agent import run_rbc_simulation
 from rbc_agent_2 import run_rbc_2_simulation
-from plot_kpis import generate_plots
+from plot_kpis import generate_available_data
 from kpi_calculator import calculate_and_save_kpis
 from pathlib import Path
 
@@ -66,4 +66,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-    generate_plots()
+    generate_available_data()

@@ -74,6 +74,7 @@
                 if (kpis) {
                     kpis.forEach(kpi => {
                         const option = new Option(kpi.name, kpi.path);
+                        option.dataset.unit = kpi.unit; // Store unit in data attribute
                         selector.add(option);
                     });
                 }
@@ -114,7 +115,10 @@
 
                 dashboard.appendChild(view);
                 
-                Plotly.newPlot(plotContainer, [], {title: 'Blank Canvas'});
+                Plotly.newPlot(plotContainer, [], {
+                    title: 'Blank Canvas',
+                    yaxis: { title: '' }
+                });
 
                 // Render existing tokens if any
                 renderTokens(view, index);
@@ -142,7 +146,9 @@
                 if (!activeView) return;
 
                 const run = modalRunSelector.value;
-                const kpi = modalKpiSelector.value;
+                const selectedOption = modalKpiSelector.options[modalKpiSelector.selectedIndex];
+                const kpi = selectedOption.value;
+                const unit = selectedOption.dataset.unit;
                 const color = modalColorPicker.value;
                 const plotContainer = activeView.querySelector('.plot-container');
                 const viewIndex = parseInt(activeView.dataset.id);
@@ -165,17 +171,22 @@
                     traceNames.push(traceName);
                 });
 
+                // Update y-axis title
+                if (plotContainer.layout.yaxis.title.text === '' && unit) {
+                    Plotly.relayout(plotContainer, { 'yaxis.title': unit });
+                }
+
                 // Store metric info in viewStates
                 if (!viewStates[viewIndex].metrics) {
                     viewStates[viewIndex].metrics = [];
                 }
-                viewStates[viewIndex].metrics.push({ run, kpi, color, traceNames });
+                viewStates[viewIndex].metrics.push({ run, kpi, color, unit, traceNames });
                 
                 renderTokens(activeView, viewIndex); // Re-render tokens for the active view
                 modal.style.display = 'none';
             }
-
-            function removeTrace(viewIndex, metricIndex) {
+			
+			function removeTrace(viewIndex, metricIndex) {
                 const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
                 const plotContainer = view.querySelector('.plot-container');
                 const metricToRemove = viewStates[viewIndex].metrics[metricIndex];
@@ -200,6 +211,11 @@
 
                 // Remove the metric from viewStates
                 viewStates[viewIndex].metrics.splice(metricIndex, 1);
+
+                // If no traces are left, clear the y-axis title
+                if (plotContainer.data.length === 0) {
+                    Plotly.relayout(plotContainer, { 'yaxis.title': '' });
+                }
 
                 renderTokens(view, viewIndex); // Re-render tokens for the active view
             }
