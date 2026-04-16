@@ -29,12 +29,9 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
     energy_export_df[energy_export_df > 0] = 0
     energy_export_df = energy_export_df.abs()
 
-    # Load
-    load_df = pd.concat([df[['Non-shiftable Load-kWh']].rename(columns={'Non-shiftable Load-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
-
-    # PV Generation
-    pv_df = pd.concat([df[['Energy Production from PV-kWh']].rename(columns={'Energy Production from PV-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
-    pv_df = pv_df.abs()
+    # Energy Imported from Grid
+    energy_imported_df = net_energy_exchange_df.copy()
+    energy_imported_df[energy_imported_df < 0] = 0
 
     # --- Read battery files ---
     all_battery_dfs = []
@@ -45,13 +42,27 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
         except FileNotFoundError:
             all_battery_dfs.append(pd.DataFrame())
             
-    # SOC
-    soc_df = pd.concat([df[['Battery Soc-%']].rename(columns={'Battery Soc-%': f'Building_{i+1}'}) if not df.empty else pd.DataFrame(index=all_building_dfs[0].index, columns=[f'Building_{i+1}']) for i, df in enumerate(all_battery_dfs)], axis=1)
-    soc_df = soc_df.fillna(0)
-
     # Action Power
     action_df = pd.concat([df[['Battery (Dis)Charge-kWh']].rename(columns={'Battery (Dis)Charge-kWh': f'Building_{i+1}'}) if not df.empty else pd.DataFrame(index=all_building_dfs[0].index, columns=[f'Building_{i+1}']) for i, df in enumerate(all_battery_dfs)], axis=1)
     action_df = action_df.fillna(0)
+
+    # Non-shiftable Load (Old Load)
+    non_shiftable_load_df = pd.concat([df[['Non-shiftable Load-kWh']].rename(columns={'Non-shiftable Load-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
+
+    # Battery Charging
+    battery_charging_df = action_df.copy()
+    battery_charging_df[battery_charging_df < 0] = 0
+
+    # New Load (Non-shiftable + Battery Charging)
+    load_df = non_shiftable_load_df.add(battery_charging_df)
+
+    # PV Generation
+    pv_df = pd.concat([df[['Energy Production from PV-kWh']].rename(columns={'Energy Production from PV-kWh': f'Building_{i+1}'}) for i, df in enumerate(all_building_dfs)], axis=1)
+    pv_df = pv_df.abs()
+            
+    # SOC
+    soc_df = pd.concat([df[['Battery Soc-%']].rename(columns={'Battery Soc-%': f'Building_{i+1}'}) if not df.empty else pd.DataFrame(index=all_building_dfs[0].index, columns=[f'Building_{i+1}']) for i, df in enumerate(all_battery_dfs)], axis=1)
+    soc_df = soc_df.fillna(0)
 
     # Battery Discharge
     battery_discharge_df = action_df.copy()
@@ -104,7 +115,9 @@ def calculate_and_save_kpis(output_dir: Path, kpi_output_dir: Path, env):
     kpi_dfs = {
         'net_energy_exchange': net_energy_exchange_df,
         'energy_export': energy_export_df,
+        'energy_imported': energy_imported_df,
         'load': load_df,
+        'non_shiftable_load': non_shiftable_load_df,
         'cost': cost_df,
         'carbon_emissions': carbon_df,
         'pv_generation': pv_df,

@@ -18,11 +18,21 @@ KPI_METADATA = {
     },
     'load': {
         'title': 'Building Load (Per Building)',
-        'description': 'Non-shiftable electrical load for each building (in kWh).',
+        'description': 'Non-shiftable electrical load + battery charging for each building (in kWh).',
         'unit': 'kWh'
     },
     'total_load': {
         'title': 'Total Building Load',
+        'description': 'Total non-shiftable electrical load + battery charging for all buildings combined (in kWh).',
+        'unit': 'kWh'
+    },
+    'non_shiftable_load': {
+        'title': 'Building Non-shiftable Load (Per Building)',
+        'description': 'Non-shiftable electrical load for each building (in kWh).',
+        'unit': 'kWh'
+    },
+    'total_non_shiftable_load': {
+        'title': 'Total Building Non-shiftable Load',
         'description': 'Total non-shiftable electrical load for all buildings combined (in kWh).',
         'unit': 'kWh'
     },
@@ -84,6 +94,16 @@ KPI_METADATA = {
     'total_energy_export': {
         'title': 'Total Energy Export',
         'description': 'Total energy exported to the grid by all buildings.',
+        'unit': 'kWh'
+    },
+    'energy_imported': {
+        'title': 'Energy Imported from Grid (Per Building)',
+        'description': 'Energy imported from the grid by each building.',
+        'unit': 'kWh'
+    },
+    'total_energy_imported': {
+        'title': 'Total Energy Imported from Grid',
+        'description': 'Total energy imported from the grid by all buildings.',
         'unit': 'kWh'
     },
     'summary_kpis': {

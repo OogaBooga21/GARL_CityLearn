@@ -12,7 +12,7 @@ BASE_OUTPUT_DIR = 'citylearn_output'
 # ---------------------------
 
 # --- Agent Parameters ---
-AGENT_TYPE = 'RBC' # 'RBC', 'PPO', or 'RBC_2'
+AGENT_TYPE = 'RBC_2' # 'RBC', 'PPO', or 'RBC_2'
 # ---------------------------
 
 # --- PPO Parameters ---
