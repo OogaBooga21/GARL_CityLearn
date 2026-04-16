@@ -5,13 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KPI Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
 
     <div class="header">
         <h1>KPI Dashboard</h1>
-        <button id="addViewBtn">Add View</button>
+        <div class="header-controls">
+            <div class="smoothing-control">
+                <label for="smoothingSlider">
+                    Smoothing: <span id="smoothingValue">0.00</span>
+                </label>
+                <input type="range" id="smoothingSlider" min="0" max="0.99" step="0.01" value="0">
+            </div>
+            <button id="addViewBtn">Add View</button>
+        </div>
     </div>
 
     <div id="dashboard">
@@ -23,9 +31,18 @@
         <div class="modal-content">
             <span class="close-button">&times;</span>
             <h2>Add Metric to Plot</h2>
+            <label class="modal-label">Run</label>
             <select id="modalRunSelector"></select>
+            <label class="modal-label">Metric</label>
             <select id="modalKpiSelector"></select>
+            <label class="modal-label">Color</label>
             <input type="color" id="modalColorPicker" value="#ff0000">
+            <label class="modal-label">Line Style</label>
+            <select id="modalLineType">
+                <option value="solid">Solid</option>
+                <option value="dot">Dotted</option>
+                <option value="dash">Dashed</option>
+            </select>
             <button id="addTraceBtn">Add Trace</button>
         </div>
     </div>
@@ -40,12 +57,125 @@
             const modalRunSelector = document.getElementById('modalRunSelector');
             const modalKpiSelector = document.getElementById('modalKpiSelector');
             const modalColorPicker = document.getElementById('modalColorPicker');
+            const modalLineType = document.getElementById('modalLineType');
+            const smoothingSlider = document.getElementById('smoothingSlider');
+            const smoothingValueDisplay = document.getElementById('smoothingValue');
 
             let availableRuns = [];
             let availableKPIs = {};
-            let viewStates = []; // Each state will now include a 'metrics' array
-            let activeView = null; // The view currently interacting with the modal
+            let viewStates = [];   // Each state: { metrics: [...] }
+            let activeView = null;
+            let smoothingWeight = 0;
 
+            // ── Smoothing ─────────────────────────────────────────────────────────
+            // TensorFlow-style exponential moving average.
+            // weight=0 → raw data, weight→1 → maximally smooth trend line.
+            function applySmoothing(data, weight) {
+                if (weight === 0 || data.length === 0) return [...data];
+                const result = [];
+                let last = data[0];
+                for (const value of data) {
+                    last = last * weight + (1 - weight) * value;
+                    result.push(last);
+                }
+                return result;
+            }
+
+            // ── Stats ─────────────────────────────────────────────────────────────
+            function computeStats(data) {
+                if (data.length === 0) return { min: 0, max: 0, avg: 0 };
+                let min = data[0], max = data[0], sum = 0;
+                for (const v of data) {
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                    sum += v;
+                }
+                return { min, max, avg: sum / data.length };
+            }
+
+            function fmtNum(n) {
+                // Compact number formatting for legend
+                if (Math.abs(n) >= 1e4) return n.toExponential(2);
+                return n.toFixed(2);
+            }
+
+            // ── Color helpers ─────────────────────────────────────────────────────
+            function generateColorShades(hexColor, count) {
+                const shades = [];
+                const baseColor = parseInt(hexColor.slice(1), 16);
+                let r = (baseColor >> 16) & 255;
+                let g = (baseColor >> 8) & 255;
+                let b = baseColor & 255;
+                for (let i = 0; i < count; i++) {
+                    const factor = 1 - (i * 0.08);
+                    const newR = Math.max(0, Math.min(255, Math.round(r * factor)));
+                    const newG = Math.max(0, Math.min(255, Math.round(g * factor)));
+                    const newB = Math.max(0, Math.min(255, Math.round(b * factor)));
+                    shades.push(`rgb(${newR},${newG},${newB})`);
+                }
+                return shades;
+            }
+
+            // ── Core render ───────────────────────────────────────────────────────
+            // Builds all Plotly traces from stored raw data + current smoothing,
+            // then does a full Plotly.newPlot (purge + recreate). This is simpler
+            // and more reliable than Plotly.react for our use case.
+            // preserveRange=true only when smoothing changes — at that point real
+            // data is already rendered and the stored range is valid. When adding
+            // or removing traces we always let Plotly auto-fit the new data.
+            function renderViewPlot(viewIndex, preserveRange = false) {
+                const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
+                if (!view) return;
+                const plotContainer = view.querySelector('.plot-container');
+                const metrics = viewStates[viewIndex].metrics || [];
+
+                const traces = [];
+                let yaxisTitle = '';
+
+                metrics.forEach(metric => {
+                    if (!metric.rawData) return;
+                    metric.rawData.forEach(series => {
+                        const smoothedY = applySmoothing(series.y, smoothingWeight);
+                        const { min, max, avg } = computeStats(series.y);
+                        const statsLine = `min: ${fmtNum(min)}  |  max: ${fmtNum(max)}  |  avg: ${fmtNum(avg)}`;
+
+                        traces.push({
+                            x: series.x,
+                            y: smoothedY,
+                            name: `${series.name}<br>${statsLine}`,
+                            line: { color: series.color, dash: metric.lineType || 'solid' },
+                            type: 'scatter',
+                            mode: 'lines'
+                        });
+                    });
+                    if (!yaxisTitle && metric.unit) yaxisTitle = metric.unit;
+                });
+
+                // Only capture the existing range when explicitly asked AND when
+                // real data has already been plotted (so we never capture the
+                // synthetic [0,1] default that Plotly sets on an empty plot).
+                const hasExistingData = plotContainer.data && plotContainer.data.length > 0;
+                const savedRange = preserveRange && hasExistingData
+                    ? plotContainer.layout?.xaxis?.range
+                    : undefined;
+
+                Plotly.newPlot(plotContainer, traces, {
+                    margin: { t: 30, r: 20, b: 60, l: 60 },
+                    yaxis: { title: yaxisTitle },
+                    xaxis: {
+                        rangeslider: { visible: true, thickness: 0.07 },
+                        ...(savedRange ? { range: savedRange } : {})
+                    },
+                    legend: {
+                        orientation: 'v',
+                        x: 1.02,
+                        xanchor: 'left',
+                        y: 1
+                    }
+                });
+            }
+
+            // ── Data fetching ─────────────────────────────────────────────────────
             async function fetchInitialData() {
                 const response = await fetch('available_data.json');
                 const data = await response.json();
@@ -74,12 +204,82 @@
                 if (kpis) {
                     kpis.forEach(kpi => {
                         const option = new Option(kpi.name, kpi.path);
-                        option.dataset.unit = kpi.unit; // Store unit in data attribute
+                        option.dataset.unit = kpi.unit;
                         selector.add(option);
                     });
                 }
             }
 
+            // ── Add trace ─────────────────────────────────────────────────────────
+            async function addTraceToPlot() {
+                if (!activeView) return;
+
+                const run = modalRunSelector.value;
+                const selectedOption = modalKpiSelector.options[modalKpiSelector.selectedIndex];
+                const kpi = selectedOption.value;
+                const unit = selectedOption.dataset.unit;
+                const color = modalColorPicker.value;
+                const lineType = modalLineType.value;
+                const viewIndex = parseInt(activeView.dataset.id);
+
+                const response = await fetch(`/api/kpi/${run}/${kpi}`);
+                const data = await response.json();
+
+                console.log('API data keys:', Object.keys(data), '| first timestamp:', data.timestamp?.[0], '| rows:', data.timestamp?.length);
+
+                const yCols = Object.keys(data).filter(k => k !== 'timestamp');
+                const shades = generateColorShades(color, yCols.length);
+
+                const rawData = yCols.map((col, i) => ({
+                    name: `${run} — ${col}`,
+                    x: data.timestamp,
+                    y: data[col],
+                    color: shades[i]
+                }));
+
+                const traceNames = rawData.map(s => s.name);
+
+                if (!viewStates[viewIndex].metrics) viewStates[viewIndex].metrics = [];
+                viewStates[viewIndex].metrics.push({ run, kpi, color, unit, lineType, rawData, traceNames });
+
+                renderViewPlot(viewIndex);
+                renderTokens(activeView, viewIndex);
+                modal.style.display = 'none';
+            }
+
+            // ── Remove trace ──────────────────────────────────────────────────────
+            function removeTrace(viewIndex, metricIndex) {
+                viewStates[viewIndex].metrics.splice(metricIndex, 1);
+                renderViewPlot(viewIndex);
+                const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
+                renderTokens(view, viewIndex);
+            }
+
+            // ── Tokens ────────────────────────────────────────────────────────────
+            function renderTokens(view, viewIndex) {
+                const tokenContainer = view.querySelector('.token-container');
+                tokenContainer.innerHTML = '';
+                const metrics = viewStates[viewIndex].metrics || [];
+                metrics.forEach((metric, metricIndex) => {
+                    const token = document.createElement('span');
+                    token.className = 'metric-token';
+                    token.style.borderColor = metric.color;
+
+                    const tokenText = document.createElement('span');
+                    tokenText.innerText = `${metric.run} — ${metric.kpi}`;
+                    token.appendChild(tokenText);
+
+                    const closeTokenBtn = document.createElement('button');
+                    closeTokenBtn.className = 'close-token-btn';
+                    closeTokenBtn.innerHTML = '&times;';
+                    closeTokenBtn.onclick = () => removeTrace(viewIndex, metricIndex);
+                    token.appendChild(closeTokenBtn);
+
+                    tokenContainer.appendChild(token);
+                });
+            }
+
+            // ── View lifecycle ────────────────────────────────────────────────────
             function createView(state, index) {
                 const view = document.createElement('div');
                 view.className = 'view';
@@ -109,140 +309,13 @@
 
                 const plotContainer = document.createElement('div');
                 plotContainer.className = 'plot-container';
-                
+
                 view.appendChild(header);
                 view.appendChild(plotContainer);
-
                 dashboard.appendChild(view);
-                
-                Plotly.newPlot(plotContainer, [], {
-                    title: 'Blank Canvas',
-                    yaxis: { title: '' }
-                });
 
-                // Render existing tokens if any
+                renderViewPlot(index);
                 renderTokens(view, index);
-            }
-
-            function generateColorShades(hexColor, count) {
-                const shades = [];
-                const baseColor = parseInt(hexColor.slice(1), 16);
-                let r = (baseColor >> 16) & 255;
-                let g = (baseColor >> 8) & 255;
-                let b = baseColor & 255;
-
-                for (let i = 0; i < count; i++) {
-                    // Adjust factor to create more distinct shades
-                    const factor = 1 - (i * 0.08); // Smaller step for more shades
-                    const newR = Math.max(0, Math.min(255, Math.round(r * factor)));
-                    const newG = Math.max(0, Math.min(255, Math.round(g * factor)));
-                    const newB = Math.max(0, Math.min(255, Math.round(b * factor)));
-                    shades.push(`rgb(${newR},${newG},${newB})`);
-                }
-                return shades;
-            }
-
-            async function addTraceToPlot() {
-                if (!activeView) return;
-
-                const run = modalRunSelector.value;
-                const selectedOption = modalKpiSelector.options[modalKpiSelector.selectedIndex];
-                const kpi = selectedOption.value;
-                const unit = selectedOption.dataset.unit;
-                const color = modalColorPicker.value;
-                const plotContainer = activeView.querySelector('.plot-container');
-                const viewIndex = parseInt(activeView.dataset.id);
-
-                const response = await fetch(`/api/kpi/${run}/${kpi}`);
-                const data = await response.json();
-
-                const yCols = Object.keys(data).filter(k => k !== 'timestamp');
-                const shades = generateColorShades(color, yCols.length);
-                const traceNames = [];
-
-                yCols.forEach((col, i) => {
-                    const traceName = `${run} - ${col}`;
-                    Plotly.addTraces(plotContainer, {
-                        x: data.timestamp,
-                        y: data[col],
-                        name: traceName,
-                        line: { color: shades[i] }
-                    });
-                    traceNames.push(traceName);
-                });
-
-                // Update y-axis title
-                if (plotContainer.layout.yaxis.title.text === '' && unit) {
-                    Plotly.relayout(plotContainer, { 'yaxis.title': unit });
-                }
-
-                // Store metric info in viewStates
-                if (!viewStates[viewIndex].metrics) {
-                    viewStates[viewIndex].metrics = [];
-                }
-                viewStates[viewIndex].metrics.push({ run, kpi, color, unit, traceNames });
-                
-                renderTokens(activeView, viewIndex); // Re-render tokens for the active view
-                modal.style.display = 'none';
-            }
-			
-			function removeTrace(viewIndex, metricIndex) {
-                const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
-                const plotContainer = view.querySelector('.plot-container');
-                const metricToRemove = viewStates[viewIndex].metrics[metricIndex];
-
-                if (!metricToRemove) return;
-
-                // Get current trace names in the plot
-                const currentPlotTraces = plotContainer.data.map(trace => trace.name);
-                const indicesToDelete = [];
-
-                metricToRemove.traceNames.forEach(name => {
-                    const idx = currentPlotTraces.indexOf(name);
-                    if (idx !== -1) {
-                        indicesToDelete.push(idx);
-                    }
-                });
-                
-                // Sort in descending order to avoid index shifting issues during deletion
-                indicesToDelete.sort((a, b) => b - a);
-
-                Plotly.deleteTraces(plotContainer, indicesToDelete);
-
-                // Remove the metric from viewStates
-                viewStates[viewIndex].metrics.splice(metricIndex, 1);
-
-                // If no traces are left, clear the y-axis title
-                if (plotContainer.data.length === 0) {
-                    Plotly.relayout(plotContainer, { 'yaxis.title': '' });
-                }
-
-                renderTokens(view, viewIndex); // Re-render tokens for the active view
-            }
-
-            function renderTokens(view, viewIndex) {
-                const tokenContainer = view.querySelector('.token-container');
-                tokenContainer.innerHTML = ''; // Clear existing tokens
-
-                const metrics = viewStates[viewIndex].metrics || [];
-
-                metrics.forEach((metric, metricIndex) => {
-                    const token = document.createElement('span');
-                    token.className = 'metric-token';
-                    token.style.borderColor = metric.color;
-
-                    const tokenText = document.createElement('span');
-                    tokenText.innerText = `${metric.run} - ${metric.kpi}`;
-                    token.appendChild(tokenText);
-
-                    const closeTokenBtn = document.createElement('button');
-                    closeTokenBtn.className = 'close-token-btn';
-                    closeTokenBtn.innerHTML = '&times;';
-                    closeTokenBtn.onclick = () => removeTrace(viewIndex, metricIndex);
-                    token.appendChild(closeTokenBtn);
-
-                    tokenContainer.appendChild(token);
-                });
             }
 
             function renderDashboard() {
@@ -251,7 +324,7 @@
             }
 
             function addView() {
-                viewStates.push({ metrics: [] }); // Initialize new view with empty metrics array
+                viewStates.push({ metrics: [] });
                 renderDashboard();
             }
 
@@ -260,23 +333,26 @@
                 renderDashboard();
             }
 
+            // ── Init ──────────────────────────────────────────────────────────────
             function init() {
-                modal.style.display = 'none'; // Ensure modal is hidden on initial load
+                modal.style.display = 'none';
+
                 addViewBtn.addEventListener('click', addView);
                 closeModal.addEventListener('click', () => modal.style.display = 'none');
                 addTraceBtn.addEventListener('click', addTraceToPlot);
                 window.addEventListener('click', (event) => {
-                    if (event.target == modal) {
-                        modal.style.display = 'none';
-                    }
+                    if (event.target === modal) modal.style.display = 'none';
+                });
+
+                smoothingSlider.addEventListener('input', () => {
+                    smoothingWeight = parseFloat(smoothingSlider.value);
+                    smoothingValueDisplay.textContent = smoothingWeight.toFixed(2);
+                    viewStates.forEach((_, index) => renderViewPlot(index, true));
                 });
 
                 fetchInitialData().then(() => {
-                    if (viewStates.length === 0) {
-                        addView();
-                    } else {
-                        renderDashboard();
-                    }
+                    if (viewStates.length === 0) addView();
+                    else renderDashboard();
                 });
             }
 
