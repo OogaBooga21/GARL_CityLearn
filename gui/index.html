@@ -63,9 +63,39 @@
 
             let availableRuns = [];
             let availableKPIs = {};
-            let viewStates = [];   // Each state: { metrics: [...] }
+            let viewStates = [];   // Each state: { metrics: [...], type: null|'chart'|'table' }
             let activeView = null;
             let smoothingWeight = 0;
+
+            // ── Summary KPI metadata ──────────────────────────────────────────
+            const SUMMARY_LABELS = {
+                total_cost:                     { label: 'Total Cost',                  fmt: v => `$${fmt2(v)}` },
+                total_carbon_emissions:         { label: 'Total Carbon Emissions',      fmt: v => `${fmt2(v)} kg CO₂` },
+                max_consumption:                { label: 'Max Net Consumption',         fmt: v => `${fmt2(v)} kWh` },
+                max_load:                       { label: 'Max Load',                    fmt: v => `${fmt2(v)} kWh` },
+                total_load_energy:              { label: 'Total Load Energy',           fmt: v => `${fmt2(v)} kWh` },
+                total_non_shiftable_energy:     { label: 'Total Non-Shiftable Energy',  fmt: v => `${fmt2(v)} kWh` },
+                total_pv_generation:            { label: 'Total PV Generation',         fmt: v => `${fmt2(v)} kWh` },
+                average_electrical_storage_soc: { label: 'Avg. Battery SoC',            fmt: v => `${(v * 100).toFixed(1)}%` },
+                total_charged:                  { label: 'Total Charged',               fmt: v => `${fmt2(v)} kWh` },
+                total_discharged:               { label: 'Total Discharged',            fmt: v => `${fmt2(v)} kWh` },
+            };
+
+            function fmt2(n) {
+                return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function summaryMetricLabel(key) {
+                if (SUMMARY_LABELS[key]) return SUMMARY_LABELS[key].label;
+                // Building_N_charged / Building_N_discharged
+                return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            }
+
+            function summaryMetricValue(key, value) {
+                if (SUMMARY_LABELS[key]) return SUMMARY_LABELS[key].fmt(value);
+                if (/_charged$|_discharged$/.test(key)) return `${fmt2(value)} kWh`;
+                return Number(value).toLocaleString('en-US', { maximumFractionDigits: 4 });
+            }
 
             // ── Smoothing ─────────────────────────────────────────────────────────
             // TensorFlow-style exponential moving average.
@@ -116,6 +146,44 @@
                 return shades;
             }
 
+            // ── Table view render ─────────────────────────────────────────────────
+            function renderTableView(container, metrics) {
+                if (metrics.length === 0) {
+                    container.innerHTML = '<div class="table-empty">Add a Summary KPI run to see results here.</div>';
+                    return;
+                }
+
+                // Collect all keys in order: top-level summary first, then per-building
+                const allKeys = [...new Set(metrics.flatMap(m => Object.keys(m.summaryData)))];
+                const topKeys      = allKeys.filter(k => !/^Building_\d+/.test(k));
+                const buildingKeys = allKeys.filter(k =>  /^Building_\d+/.test(k));
+
+                let html = '<div class="table-wrapper"><table class="kpi-table"><thead><tr><th>Metric</th>';
+                for (const m of metrics) {
+                    html += `<th style="border-top:3px solid ${m.color}">${m.run}</th>`;
+                }
+                html += '</tr></thead><tbody>';
+
+                const renderRow = key => {
+                    html += `<tr><td class="table-metric-name">${summaryMetricLabel(key)}</td>`;
+                    for (const m of metrics) {
+                        const v = m.summaryData[key];
+                        html += `<td class="table-value">${v !== undefined ? summaryMetricValue(key, v) : '—'}</td>`;
+                    }
+                    html += '</tr>';
+                };
+
+                topKeys.forEach(renderRow);
+
+                if (buildingKeys.length > 0) {
+                    html += `<tr class="table-section-divider"><td colspan="${metrics.length + 1}">Per Building</td></tr>`;
+                    buildingKeys.forEach(renderRow);
+                }
+
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            }
+
             // ── Core render ───────────────────────────────────────────────────────
             // Builds all Plotly traces from stored raw data + current smoothing,
             // then does a full Plotly.newPlot (purge + recreate). This is simpler
@@ -127,7 +195,13 @@
                 const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
                 if (!view) return;
                 const plotContainer = view.querySelector('.plot-container');
-                const metrics = viewStates[viewIndex].metrics || [];
+                const viewState = viewStates[viewIndex];
+                const metrics = viewState.metrics || [];
+
+                if (viewState.type === 'table') {
+                    renderTableView(plotContainer, metrics);
+                    return;
+                }
 
                 const traces = [];
                 let yaxisTitle = '';
@@ -221,26 +295,45 @@
                 const color = modalColorPicker.value;
                 const lineType = modalLineType.value;
                 const viewIndex = parseInt(activeView.dataset.id);
+                const isSummary = kpi === 'summary_kpis';
+                const viewType = viewStates[viewIndex].type;
+
+                // Guard: summary KPIs can only go into empty or table views
+                if (isSummary && viewType === 'chart') {
+                    alert('Summary KPIs cannot be added to a chart view.\nAdd them to an empty view instead.');
+                    return;
+                }
+                // Guard: chart KPIs cannot go into a table view
+                if (!isSummary && viewType === 'table') {
+                    alert('Chart metrics cannot be added to a Summary KPI table.\nUse a chart view or an empty view.');
+                    return;
+                }
 
                 const response = await fetch(`/api/kpi/${run}/${kpi}`);
                 const data = await response.json();
 
-                console.log('API data keys:', Object.keys(data), '| first timestamp:', data.timestamp?.[0], '| rows:', data.timestamp?.length);
-
-                const yCols = Object.keys(data).filter(k => k !== 'timestamp');
-                const shades = generateColorShades(color, yCols.length);
-
-                const rawData = yCols.map((col, i) => ({
-                    name: `${run} — ${col}`,
-                    x: data.timestamp,
-                    y: data[col],
-                    color: shades[i]
-                }));
-
-                const traceNames = rawData.map(s => s.name);
-
                 if (!viewStates[viewIndex].metrics) viewStates[viewIndex].metrics = [];
-                viewStates[viewIndex].metrics.push({ run, kpi, color, unit, lineType, rawData, traceNames });
+
+                if (isSummary) {
+                    // Flatten single-element arrays to scalars
+                    const summaryData = {};
+                    for (const [key, val] of Object.entries(data)) {
+                        summaryData[key] = Array.isArray(val) ? val[0] : val;
+                    }
+                    viewStates[viewIndex].type = 'table';
+                    viewStates[viewIndex].metrics.push({ run, kpi, color, summaryData });
+                } else {
+                    const yCols = Object.keys(data).filter(k => k !== 'timestamp');
+                    const shades = generateColorShades(color, yCols.length);
+                    const rawData = yCols.map((col, i) => ({
+                        name: `${run} — ${col}`,
+                        x: data.timestamp,
+                        y: data[col],
+                        color: shades[i]
+                    }));
+                    viewStates[viewIndex].type = 'chart';
+                    viewStates[viewIndex].metrics.push({ run, kpi, color, unit, lineType, rawData, traceNames: rawData.map(s => s.name) });
+                }
 
                 renderViewPlot(viewIndex);
                 renderTokens(activeView, viewIndex);
@@ -250,6 +343,9 @@
             // ── Remove trace ──────────────────────────────────────────────────────
             function removeTrace(viewIndex, metricIndex) {
                 viewStates[viewIndex].metrics.splice(metricIndex, 1);
+                if (viewStates[viewIndex].metrics.length === 0) {
+                    viewStates[viewIndex].type = null;
+                }
                 renderViewPlot(viewIndex);
                 const view = dashboard.querySelector(`[data-id="${viewIndex}"]`);
                 renderTokens(view, viewIndex);
@@ -324,7 +420,7 @@
             }
 
             function addView() {
-                viewStates.push({ metrics: [] });
+                viewStates.push({ metrics: [], type: null });
                 renderDashboard();
             }
 

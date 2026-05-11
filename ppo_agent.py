@@ -1,3 +1,4 @@
+import types
 import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -8,6 +9,29 @@ from custom_rewards import GridConsumptionReward
 import config
 from pathlib import Path
 from utils import copy_output_files # Import copy_output_files
+
+
+def _fast_community_as_dict(self):
+    """
+    O(1) replacement for CityLearnEnv.as_dict().
+
+    The default implementation calls total_self_consumption, energy_to_electrical_storage
+    and solar_generation — all of which rebuild a full cross-building DataFrame on every
+    call, producing O(n²) simulation time as the episode grows. Those columns are not
+    consumed by kpi_calculator, so we skip them here.
+    """
+    if not self.net_electricity_consumption:
+        idx = 0
+    else:
+        idx = max(0, min(self.time_step, len(self.net_electricity_consumption) - 1))
+    return {
+        "Net Electricity Consumption-kWh": self.net_electricity_consumption[idx],
+        "Self Consumption-kWh": 0,
+        "Stored energy by community- kWh": 0,
+        "Total Solar Generation-kWh": 0,
+        "CO2-kg_co2": self.net_electricity_consumption_emission[idx],
+        "Price-$": self.net_electricity_consumption_cost[idx],
+    }
 
 class PPOAgent:
     """
@@ -138,6 +162,7 @@ def run_ppo_evaluation(schema_path, run_id: str):
         render_directory=Path.cwd() / Path(config.BASE_OUTPUT_DIR), # Base directory for all runs
         render_session_name=run_id # This will create the unique subdirectory
     )
+    eval_env.as_dict = types.MethodType(_fast_community_as_dict, eval_env)
 
     eval_env.buildings = [eval_env.buildings[0]]
     

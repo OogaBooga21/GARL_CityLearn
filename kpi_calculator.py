@@ -172,6 +172,10 @@ def calculate_and_save_summary_kpis(kpi_output_dir: Path):
 
     total_load_df = pd.read_csv(kpi_output_dir / 'total_load.csv')
     summary_data['max_load'] = total_load_df['load'].max()
+    summary_data['total_load_energy'] = total_load_df['load'].sum()
+
+    total_non_shiftable_load_df = pd.read_csv(kpi_output_dir / 'total_non_shiftable_load.csv')
+    summary_data['total_non_shiftable_energy'] = total_non_shiftable_load_df['non_shiftable_load'].sum()
 
     total_pv_generation_df = pd.read_csv(kpi_output_dir / 'total_pv_generation.csv')
     summary_data['total_pv_generation'] = total_pv_generation_df['pv_generation'].sum()

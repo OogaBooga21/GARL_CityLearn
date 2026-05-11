@@ -7,12 +7,12 @@ This file contains the configuration parameters for the CityLearn simulation.
 SCHEMA_PATH = '/home/oli/Documents/Work/EC_RL/schema.json'
 DATASET_NAME = 'citylearn_challenge_2020_climate_zone_1'
 CENTRAL_AGENT = False
-EPISODE_TIME_STEPS = 1000 #8760 max
+EPISODE_TIME_STEPS = 8760 #8760 max
 BASE_OUTPUT_DIR = 'citylearn_output'
 # ---------------------------
 
 # --- Agent Parameters ---
-AGENT_TYPE = 'RBC_2' # 'RBC', 'PPO', or 'RBC_2'
+AGENT_TYPE = 'RBC' # 'RBC', 'PPO', or 'RBC_2'
 # ---------------------------
 
 # --- PPO Parameters ---
